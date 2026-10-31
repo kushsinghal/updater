@@ -88,3 +88,6 @@ Website that finds big deals (Flipkart 100% SuperCoin, gift card discounts, heav
 ## Backlog
 - P1: Amazon images often missing (Amazon blocks scraping) — consider Amazon PA-API
 - P2: publish bulk-converted deals to website/Telegram in one tap
+
+## Iteration 12 (Jun 2026)
+- Copy now copies text only (title, deal price, MRP, % off, store, your link) so it pastes everywhere; Share sends text to any app; "Share with image" is optional in bulk results. Bulk: "Copy all deals with details" button.

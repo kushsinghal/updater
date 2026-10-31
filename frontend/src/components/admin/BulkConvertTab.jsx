@@ -2,7 +2,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { Copy, Share2, ImageDown } from "lucide-react";
 import { api, errMsg, inr } from "@/lib/api";
-import { copyText, copyWithImage, shareDeal } from "@/lib/share";
+import { copyText, copyDeal, shareDeal, shareWithImage, dealText } from "@/lib/share";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Panel, primaryBtn, ghostBtn } from "./Panel";
@@ -10,7 +10,7 @@ import { Panel, primaryBtn, ghostBtn } from "./Panel";
 const btn = "flex items-center gap-1.5 rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 transition-colors hover:bg-slate-200";
 
 const ResultCard = ({ it, i }) => {
-  const deal = { title: it.title, price: it.price, mrp: it.mrp, image: it.image, link: it.converted };
+  const deal = { title: it.title, price: it.price, mrp: it.mrp, store: it.store, image: it.image, link: it.converted };
   return (
     <div data-testid={`bulk-result-${i}`} className="flex gap-4 rounded-xl border border-slate-200 bg-white p-3">
       <div className="h-24 w-24 shrink-0 overflow-hidden rounded-lg bg-slate-100">
@@ -29,9 +29,10 @@ const ResultCard = ({ it, i }) => {
         <p className="break-all font-mono text-[11px] text-slate-400 line-through">{it.original}</p>
         <p data-testid={`bulk-converted-${i}`} className="break-all font-mono text-xs text-slate-800">{it.converted}</p>
         <div className="flex flex-wrap gap-2 pt-1">
-          <button data-testid={`bulk-copy-link-${i}`} className={btn} onClick={() => copyText(it.converted, "Link copied")}><Copy className="h-3.5 w-3.5" /> Link</button>
-          <button data-testid={`bulk-copy-image-${i}`} className={btn} onClick={() => copyWithImage(deal)}><ImageDown className="h-3.5 w-3.5" /> Copy with image</button>
+          <button data-testid={`bulk-copy-link-${i}`} className={btn} onClick={() => copyText(it.converted, "Link copied")}><Copy className="h-3.5 w-3.5" /> Link only</button>
+          <button data-testid={`bulk-copy-details-${i}`} className={btn} onClick={() => copyDeal(deal)}><Copy className="h-3.5 w-3.5" /> Copy details + link</button>
           <button data-testid={`bulk-share-${i}`} className={btn} onClick={() => shareDeal(deal)}><Share2 className="h-3.5 w-3.5" /> Share</button>
+          {it.image && <button data-testid={`bulk-share-image-${i}`} className={btn} onClick={() => shareWithImage(deal)}><ImageDown className="h-3.5 w-3.5" /> Share with image</button>}
         </div>
       </div>
     </div>
@@ -64,7 +65,10 @@ export const BulkConvertTab = () => {
       </Panel>
       {res && (
         <Panel testid="bulk-results-panel" title={`${res.items.filter((x) => x.changed).length} of ${res.items.length} links converted`}
-          action={<Button data-testid="bulk-copy-message-button" className={ghostBtn} onClick={() => copyText(res.message, "Full message with your links copied")}><Copy className="mr-1 h-4 w-4" /> Copy full message</Button>}>
+          action={<div className="flex flex-wrap gap-2">
+            <Button data-testid="bulk-copy-all-details-button" className={primaryBtn} onClick={() => copyText(res.items.map((it) => dealText({ title: it.title, price: it.price, mrp: it.mrp, store: it.store, link: it.converted })).join("\n\n➖➖➖➖➖\n\n"), "All deals with details copied")}><Copy className="mr-1 h-4 w-4" /> Copy all deals with details</Button>
+            <Button data-testid="bulk-copy-message-button" className={ghostBtn} onClick={() => copyText(res.message, "Full message with your links copied")}><Copy className="mr-1 h-4 w-4" /> Copy original message</Button>
+          </div>}>
           <pre data-testid="bulk-message" className="mb-4 max-h-48 overflow-auto whitespace-pre-wrap break-all rounded-xl bg-[#F5F2EA] p-3 font-mono text-xs">{res.message}</pre>
           <div className="space-y-3">{res.items.map((it, i) => <ResultCard key={it.original} it={it} i={i} />)}</div>
         </Panel>

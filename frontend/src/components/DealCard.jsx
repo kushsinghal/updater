@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import { api, CATS, inr, timeAgo } from "@/lib/api";
 import { PriceHistoryDialog } from "@/components/PriceHistoryDialog";
 import { OriginalPostDialog } from "@/components/OriginalPostDialog";
-import { copyWithImage, shareDeal } from "@/lib/share";
+import { copyDeal, shareDeal } from "@/lib/share";
 
 const Thumb = ({ deal }) =>
   deal.image ? (
@@ -21,7 +21,7 @@ export const DealCard = ({ deal, index = 0, onChange }) => {
   const [starred, setStarred] = useState(!!deal.featured);
   const [chart, setChart] = useState(false);
   const link = deal.affiliate_url || deal.url;
-  const shareData = { title: deal.title, price: deal.price, mrp: deal.mrp, image: deal.image, link };
+  const shareData = { title: deal.title, price: deal.price, mrp: deal.mrp, discount: deal.discount, store: deal.store, image: deal.image, link };
   const toggleStar = async () => {
     const next = !starred;
     setStarred(next);
@@ -81,10 +81,10 @@ export const DealCard = ({ deal, index = 0, onChange }) => {
           <button onClick={() => setChart(true)} data-testid={`price-history-button-${deal.id}`} aria-label="Price history" className={`${iconBtn} text-emerald-700`}>
             <LineChart className="h-4 w-4" />
           </button>
-          <button onClick={() => copyWithImage(shareData)} data-testid={`copy-deal-link-button-${deal.id}`} aria-label="Copy deal with image" title="Copy image + text + link" className={`${iconBtn} text-slate-700`}>
+          <button onClick={() => copyDeal(shareData)} data-testid={`copy-deal-link-button-${deal.id}`} aria-label="Copy deal details" title="Copy name, MRP, deal price + link" className={`${iconBtn} text-slate-700`}>
             <Copy className="h-4 w-4" />
           </button>
-          <button onClick={() => shareDeal(shareData)} data-testid={`share-deal-button-${deal.id}`} aria-label="Share deal" title="Share with image" className={`${iconBtn} text-[#FF5A1F]`}>
+          <button onClick={() => shareDeal(shareData)} data-testid={`share-deal-button-${deal.id}`} aria-label="Share deal" title="Share to any app" className={`${iconBtn} text-[#FF5A1F]`}>
             <Share2 className="h-4 w-4" />
           </button>
           {deal.source_post_url ? (

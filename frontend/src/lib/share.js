@@ -3,11 +3,14 @@ import { inr } from "@/lib/api";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
-export const dealText = ({ title, price, mrp, link }) => {
-  const off = price && mrp && mrp > price ? Math.round((1 - price / mrp) * 100) : null;
-  const lines = [title || "Hot deal"];
-  if (price) lines.push(`Price: ${inr(price)}${mrp && mrp > price ? ` (MRP ${inr(mrp)}${off ? `, ${off}% off` : ""})` : ""}`);
-  lines.push(link);
+export const dealText = ({ title, price, mrp, discount, store, link }) => {
+  const off = price && mrp && mrp > price ? Math.round((1 - price / mrp) * 100) : discount ? Math.round(discount) : null;
+  const lines = [`🔥 ${title || "Hot deal"}`, ""];
+  if (price) lines.push(`✅ Deal Price: ${inr(price)}`);
+  if (mrp && (!price || mrp > price)) lines.push(`❌ MRP: ${inr(mrp)}`);
+  if (off) lines.push(`💥 ${off}% OFF`);
+  if (store && store !== "Other") lines.push(`🛒 Store: ${store}`);
+  lines.push("", `👉 Buy now: ${link}`);
   return lines.join("\n");
 };
 
@@ -24,21 +27,6 @@ const imageFile = async (image) => {
   }
 };
 
-const toPng = (file) =>
-  new Promise((resolve) => {
-    const img = new Image();
-    img.onload = () => {
-      const c = document.createElement("canvas");
-      c.width = img.naturalWidth;
-      c.height = img.naturalHeight;
-      c.getContext("2d").drawImage(img, 0, 0);
-      c.toBlob((b) => resolve(b), "image/png");
-      URL.revokeObjectURL(img.src);
-    };
-    img.onerror = () => resolve(null);
-    img.src = URL.createObjectURL(file);
-  });
-
 export const copyText = async (text, msg = "Copied") => {
   try {
     await navigator.clipboard.writeText(text);
@@ -53,31 +41,30 @@ export const copyText = async (text, msg = "Copied") => {
   toast.success(msg);
 };
 
-export const copyWithImage = async (deal) => {
-  const text = dealText(deal);
-  const file = await imageFile(deal.image);
-  const png = file && (await toPng(file));
-  if (png && window.ClipboardItem) {
-    try {
-      await navigator.clipboard.write([new window.ClipboardItem({ "image/png": png, "text/plain": new Blob([text], { type: "text/plain" }) })]);
-      return toast.success("Image + deal text copied. Paste in WhatsApp/Telegram");
-    } catch {
-      /* falls back to text */
-    }
-  }
-  return copyText(text, "Deal text + link copied");
-};
+export const copyDeal = (deal) => copyText(dealText(deal), "Deal details + link copied. Paste anywhere");
 
 export const shareDeal = async (deal) => {
   const text = dealText(deal);
-  const file = await imageFile(deal.image);
-  try {
-    if (file && navigator.canShare?.({ files: [file] })) {
-      return await navigator.share({ files: [file], text, title: deal.title });
+  if (navigator.share) {
+    try {
+      return await navigator.share({ text });
+    } catch (e) {
+      if (e?.name === "AbortError") return;
     }
-    if (navigator.share) return await navigator.share({ text, title: deal.title });
-  } catch (e) {
-    if (e?.name === "AbortError") return;
   }
-  return copyWithImage(deal);
+  return copyText(text, "Deal details + link copied. Paste anywhere");
+};
+
+export const shareWithImage = async (deal) => {
+  const text = dealText(deal);
+  const file = await imageFile(deal.image);
+  if (file && navigator.canShare?.({ files: [file] })) {
+    try {
+      await copyText(text, "Text copied too — paste it if the app drops it");
+      return await navigator.share({ files: [file], text });
+    } catch (e) {
+      if (e?.name === "AbortError") return;
+    }
+  }
+  return shareDeal(deal);
 };
