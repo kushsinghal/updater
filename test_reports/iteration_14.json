@@ -1,0 +1,37 @@
+{
+  "summary": "Tested Telegram-preview pictures for Flipkart in bulk convert and BULK_MAX=10, in both backend and UI. Pictures work: a no-pid Flipkart link gets image <base>/api/img/<id> and the title 'Apple iPhone 15 (Black, 128 GB)'. /api/img returns a valid JPEG (FFD8), /api/go og:image equals that URL, /api/img/unknown gives 404, and 12 links give 10 items with 2 skipped. The UI flow passes: progress labels 0/10 -> 3/10 -> 6/10 -> 9/10, 4 sequential requests of 3,3,3,1 links, 10 cards, the toast, 'Load next 2 links' (it fills the input with the remaining 2), pictures shown with no Add-picture box, the message has replacements, and Copy all = header + 10 /api/go blocks. CRITICAL BUG: when the Telegram preview runs (base sent, Flipkart link without a known image), the Sankmo conversion of that link fails with the misleading error 'Sankmo not set up or returned no link'. It reproduced 3 out of 3 times in the backend and also in the UI (card 0). The same link converts fine via /api/convert, or via bulk without base.",
+  "backend_issues": {
+    "critical": [
+      {"endpoint": "POST /api/convert/bulk", "issue": "tgconv.web_previews is started with asyncio.create_task and runs at the same time as engine.convert_link -> tgconv.convert_via_bot. That opens a second TelegramClient on the SAME StringSession/auth key. Telegram delivers the bot's reply update to only one connection, so the conversation in _convert never gets it and raises TimeoutError. Since str(TimeoutError()) == '', err is empty and the code falls through to 'Sankmo not set up or returned no link'. Result: exactly the Flipkart links that need a picture lookup end up NOT converted (the user gets the original link, no affiliate). Verified with a standalone script: concurrent -> TimeoutError; preview first and then convert -> https://fkrt.site/kVONimB OK.", "priority": "CRITICAL"}
+    ],
+    "minor": [
+      {"endpoint": "POST /api/convert/bulk", "issue": "Error text is empty for TimeoutError (and other exceptions with no message), which hides the real cause. Use str(e) or type(e).__name__, e.g. 'Sankmo bot timed out'."},
+      {"endpoint": "POST /api/convert/bulk", "issue": "body.base comes from the client without checks and is stored in db.links as the image URL. Better to derive it server-side or validate it against an allowed host."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {"flow": "Bulk convert Flipkart no-pid link", "issue": "Card shows the picture but the status is 'Sankmo not set up or returned no link' and the link is not converted (backend concurrency bug above)", "affected_selectors": ["[data-testid=bulk-status-0]", "[data-testid=bulk-converted-0]"]}
+    ],
+    "design_issues": []
+  },
+  "test_report_links": ["/app/backend/tests/test_iteration14_tg_preview_bulk.py", "/app/test_reports/pytest/iteration14.xml"],
+  "action_items": [
+    "CRITICAL: in convert_bulk, do not run web_previews at the same time as the bot conversions. Either await previews before the convert loop (or after it), or do both through one shared TelegramClient/connection under tgconv._lock. Simplest: previews = await tgconv.web_previews(...) before the loop.",
+    "Show a meaningful error when convert_via_bot times out (str(e) is empty for TimeoutError)",
+    "Add a test asserting that a no-pid Flipkart link in bulk convert with base has changed=True AND an image"
+  ],
+  "critical_code_review_comments": [
+    "db.images stores raw JPEG bytes with no TTL or dedup; the same product gets a new image doc on every bulk convert. Consider keying by the cleaned URL or itm id, and adding a TTL index",
+    "Cards load /api/img/<id> via /api/image-proxy (the server fetches its own public URL). This works but is a needless round trip; use /api/img directly when the image starts with base",
+    "db.links still has no index on 'code'"
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration14_tg_preview_bulk.py"],
+  "success_rate": {"backend": "85% (6/6 pytest pass, but conversion is broken whenever the preview path runs)", "frontend": "90%"},
+  "seed_data_creation": "Several db.links and db.images docs were created by the bulk converts. Settings were not modified. Telegram was not logged out.",
+  "retest_needed": true,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Reproduce: POST /api/convert/bulk {text:'https://www.flipkart.com/apple-iphone-15/p/itm6ac6485515ae4', base:<REACT_APP_BACKEND_URL>} -> items[0].changed should be True with a fkrt.site link AND items[0].image should be /api/img/. Without base it converts fine. The pid link (?pid=MOBGTAGPTB3VS24W) already gets an image from pricehistory, so it skips the preview and converts OK. amazon_tag is empty in settings ('Add your Amazon tag first' is expected).",
+  "rca of the issue": "Two concurrent Telethon clients share one auth key (StringSession). Updates (the bot's reply) are routed to only one connection, so the convert client's conversation times out. Mitigation: run the preview and the conversion one after the other, or share one client."
+}

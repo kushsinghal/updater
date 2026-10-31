@@ -89,6 +89,11 @@ async def web_previews(urls, settings, timeout=25):
     """Ask Telegram (which stores don't block) for link previews: title + product photo."""
     if not settings.get("tg_session") or not urls:
         return {}
+    async with _lock:
+        return await _previews(urls, settings, timeout)
+
+
+async def _previews(urls, settings, timeout):
     client = TelegramClient(StringSession(settings["tg_session"]), int(settings["tg_api_id"]), settings["tg_api_hash"])
     await client.connect()
     try:

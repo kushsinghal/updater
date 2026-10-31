@@ -735,14 +735,14 @@ async def convert_bulk(body: BulkIn):
     cleaned = await asyncio.gather(*[engine.clean_link(u) for u in links])
     infos = await asyncio.gather(*[deal_info(c) for c in cleaned])
     missing = list(dict.fromkeys(c for c, i in zip(cleaned, infos) if not i["image"] and engine.detect_store(c) != "Amazon"))
-    previews = asyncio.create_task(tgconv.web_previews(missing, settings)) if missing and body.base else None
+    base = body.base.rstrip("/") if body.base and re.match(r"https://[\w.-]+$", body.base.rstrip("/")) else None
     items, swaps = [], []
     for orig, clean, info in zip(links, cleaned, infos):
         err = None
         try:
             out = await engine.convert_link(clean, settings)
         except Exception as e:
-            out, err = clean, str(e)[:300]
+            out, err = clean, (str(e) or ("Sankmo bot timed out" if isinstance(e, asyncio.TimeoutError) else type(e).__name__))[:300]
             if "login expired" in err:
                 await db.settings.update_one({"id": "main"}, {"$set": {"tg_expired": True}})
         store = engine.detect_store(clean)
@@ -753,8 +753,11 @@ async def convert_bulk(body: BulkIn):
         await db.links.insert_one({"code": code, "url": out, "store": store, **info, "created_at": now()})
         items.append({"original": orig, "cleaned": clean, "converted": out, "changed": out != clean, "error": err,
                       "store": store, "share_code": code, **info})
-    if previews:
-        await fill_pictures(items, await previews, body.base.rstrip("/"))
+    if missing and base:
+        try:
+            await fill_pictures(items, await tgconv.web_previews(missing, settings), base)
+        except Exception as e:
+            logger.warning(f"picture lookup failed: {e}")
     lookup = dict(swaps)
     pattern = "|".join(re.escape(o) for o, _ in sorted(swaps, key=lambda x: -len(x[0])))
     message = re.sub(pattern, lambda m: lookup[m.group(0)], body.text)
