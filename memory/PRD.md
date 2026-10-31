@@ -1,0 +1,82 @@
+# DealLoot — PRD
+
+## Original problem
+Website that finds big deals (Flipkart 100% SuperCoin, gift card discounts, heavy product discounts, loot/price errors) from Flipkart and other stores, converts links to Sankmo earning links, shows them on the website and auto-posts them to multiple Telegram bots/channels. Phase 2: pull from other Telegram channels, websites, X and WhatsApp channels, plus price comparison and price history.
+
+## User choices
+- Sources: auto-fetch from public sources + manual add + user-added channel links
+- Auto-post, with each channel getting its own rules (deal types, min %, stores)
+- Rules: 100% SuperCoin, gift cards at ≥5% (editable), products at ≥70%, loot/price errors
+- No login. Telegram and Sankmo tokens can be edited in the UI.
+
+## Architecture
+- FastAPI (`server.py` routes, `engine.py` for scraping/parsing/classifying/Sankmo/Telegram) + MongoDB (deals, sources, destinations, settings, logs, cron_runs)
+- Sources: public Telegram channels scraped from t.me/s/<name>, and RSS feeds
+- Platform cron `.emergent/crons.yml` runs every 15 min → POST /api/cron/fetch (bearer WEBHOOK_CRON_SECRET)
+- React: `/` public deals feed and `/admin` control room (Sources, Telegram Channels, Rules, Add Deal, Sankmo Links, Post Log)
+
+## Implemented (June 2026)
+- Scraper, parser and classifier with deduping. The first scan of a new source saves deals without posting them.
+- Multi-destination Telegram router (sendPhoto falling back to sendMessage), test message, masked tokens
+- Generic Sankmo converter: GET template with {url}/{token}, or POST JSON. Falls back to the original link.
+- Manual deal posting, post log, stats
+
+## Iteration 2 (Oct 2026)
+- Check interval (15 min–24 h) and max posts per update (1–200) are editable. Price-drop threshold is editable (default 70%).
+- Best Deals section: scored automatically (SuperCoin > loot > gift card > discount) plus admin-starred picks. New admin Deals tab to star, repost and delete.
+- Link cleaning: resolves short links and wrappers and removes other people's affiliate tags (tag, affid, utm, etc.) before converting
+- Sankmo through @sankmo_bot using the user's Telegram account (Telethon: API ID/hash, phone code, optional 2-step password). Sankmo token saved.
+- Added 10 more Telegram channels and the CoolzTricks RSS feed. Duplicates across channels removed (same link or title within 2 days).
+
+## Iteration 3 (Oct 2026)
+- Deals keep the original post time (Telegram <time> / RSS published) and cards show "posted X ago". Posts older than 24h are ignored and only posts under 60 min are sent to Telegram (both editable).
+- Background poller in the app checks every 30s / 1m / 2m / 5m … 1h (editable). The 15-min cron stays as a backup. Sources are fetched 6 at a time.
+- Star button on every card, a Starred filter and a "Starred first" sort
+- Price tracking per product (Amazon ASIN / Flipkart pid). Each deal has a price chart dialog with compare links (Amazon, Flipkart, Myntra, Croma, Google Shopping, PriceHistory). New Lowest Price Ever section.
+
+## Iteration 4 (Oct 2026)
+- Every tab (including Best) is sorted by original post time. The share button is replaced with an "Original post" button (t.me/<channel>/<id>).
+- Telegram posts use sendPhoto when there's an image, otherwise a large link preview shown above the text. og:image lookup for deals without an image.
+- "Find my chat ID" helper (getUpdates) for sending to a personal chat or channel
+- Added 8 more channels (23 sources total). dealsmagnet.com/deal pages are resolved to the real store link. Undated RSS items are skipped.
+
+## Iteration 5 (Oct 2026)
+- Full store price history from pricehistory.app (unofficial: search → page token → /api/price). Cached for 6h in ph_cache. Background enrichment fills in missing price/image/title and sets lowest_ever when price ≤ the all-time min. Prices below 30% of the all-time min are treated as implausible.
+- Chart dialog with one coloured line per store plus a channel-seen line, 15D/1M/3M/6M/1Y/All ranges, per-store stats and a best-price store link
+- Original post button labelled "Post", pointing to the t.me/s/ web view. Scan now button on the Deals page.
+
+## Iteration 6 (Oct 2026)
+- Light warm theme (#F5F2EA background, white cards), replacing the dark theme
+- The Post button opens an in-app dialog with the original text, image and time, plus tg://resolve "Open in Telegram app" and web links. t.me is blocked by some Indian ISPs. New route GET /api/deals/{id}/original.
+- Added backend/requirements-render.txt (no emergent-only packages) for deploying on Render
+
+## Iteration 7 (Oct 2026)
+- Sankmo real API found in their dashboard bundle: POST https://sankmo.in/api/convertMunafaLinks (form text=<url>, Authorization: Bearer <token>) → convertedText. New default convert_mode "sankmo_api". The saved token returns "Invalid Token!", so the user must click Generate Token on sankmo.in/influencers/publicApi.
+- Fixed test message error (link_preview_options url=None). Destination name is optional; chat_id is required and stripped. Friendly errors for chat not found / unauthorized. Edit scrolls to the form and shows a toast. Find chat ID works in edit mode via destination_id.
+- Deals page redesign: "Fresh loot" hero, last scan time, fresh-in-3h count, big Scan now button, black-outline cards with lime accent. /stats returns last_scan_at, fresh_3h and check_interval_seconds.
+- Removed the forced dark class; Switch colours fixed for the light theme
+
+## Iteration 8 (Oct 2026)
+- CRITICAL FIX: an unauthorized Telethon session caused start() to call input() and freeze the whole backend. tgconv now uses connect(), checks is_user_authorized and wraps the call in wait_for. An expired session sets tg_expired and the UI shows a reconnect state.
+- Editing banner and highlighted row in Telegram Channels (the user overwrote a bot while in edit mode)
+- Deals page redesign: dark hero card with orange (#FF5A1F) accent, soft white cards, sticky header fixed
+- Added sources @CrafinGiftCard, @dealpao, @pakkapickdeals, @dealdetectors (26 total). PointsPerksPicks not found.
+- Sankmo public token rejected ("Invalid Token!") by the convertMunafaLinks endpoint; the real public-API format is unknown
+
+## Iteration 9 (Oct 2026)
+- New source kind "web": desidime.com/new (article.deal-card) and dealsmagnet.com (.hotdeal) scrapers with relative-time parsing. crafin.in is captcha-protected (SiteGround + Cloudflare), so an error tells the user to use @CrafinGiftCard.
+- Telegram post_style "simple" (default): photo + bold "100% Supercoins Back: title" + price + link; "detailed" is optional
+- Search works on the Best tab. Dedupe also by product_key + same price.
+- /app/render.yaml blueprint (free API web service + static site) and backend/requirements-render.txt
+
+## Iteration 10 (Oct 2026)
+- Telegram delivery verified working (test plus 1 SuperCoin deal sent to the user's chat). Auto-post only covers deals found after a channel exists, so a "Send recent" button and POST /destinations/{id}/send-recent now backfill matching deals within telegram_max_age_minutes.
+- The fresh counter window follows telegram_max_age_minutes; the hero shows when the newest deal was posted
+- send-code falls back to the saved api_id/api_hash
+- Sankmo via @sankmo_bot is now WORKING (returns fkrt.site links). POST /deals/reconvert converts the last 24h of deals in the background.
+
+## Backlog
+- P0: user connects Telegram account (my.telegram.org API ID/hash) → verify Sankmo bot conversion
+- P1: Price history / lowest-ever section, live price comparison across stores
+- P1: admin password; X/WhatsApp (skipped: paid/no public access)
+- P2: better price/title parsing, custom message templates, deal expiry

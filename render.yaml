@@ -1,0 +1,34 @@
+services:
+  - type: web
+    name: dealloot-api
+    runtime: python
+    plan: free
+    rootDir: backend
+    buildCommand: pip install -r requirements-render.txt
+    startCommand: uvicorn server:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /api/stats
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
+      - key: MONGO_URL
+        sync: false
+      - key: DB_NAME
+        value: dealloot
+      - key: CORS_ORIGINS
+        value: "*"
+      - key: WEBHOOK_CRON_SECRET
+        generateValue: true
+
+  - type: web
+    name: dealloot-web
+    runtime: static
+    rootDir: frontend
+    buildCommand: yarn install && yarn build
+    staticPublishPath: build
+    envVars:
+      - key: REACT_APP_BACKEND_URL
+        sync: false
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html

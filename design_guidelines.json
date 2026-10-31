@@ -1,0 +1,166 @@
+{
+  "project_title": "DealLoot - Heavy Discount, SuperCoin & Telegram Bot Auto-Publisher",
+  "app_type": "hybrid_fullstack",
+  "archetype": "High-Contrast Kinetic E-Commerce & Precision Admin",
+  "tech_stack": {
+    "frontend": "React JS (.js / .jsx), Tailwind CSS, Framer Motion, Lucide React Icons, Shadcn UI primitives, Sonner toasts",
+    "backend": "FastAPI (Python) with Telegram Bot API integration, Sankmo Link Converter Engine, RSS/Telegram Channel Scraper, Deal History tracking",
+    "file_extension": ".js"
+  },
+  "theme_strategy": {
+    "default_mode": "dark",
+    "theme_switch_available": true,
+    "dark_palette": {
+      "bg_primary": "#0A0E17",
+      "bg_secondary": "#111827",
+      "bg_card": "#161F30",
+      "bg_card_hover": "#1E293B",
+      "border_default": "#243147",
+      "border_highlight": "#374151",
+      "text_primary": "#F9FAFB",
+      "text_secondary": "#9CA3AF",
+      "text_muted": "#6B7280"
+    },
+    "category_colors": {
+      "supercoin_100": {
+        "bg": "bg-purple-950/80 border-purple-500/50 text-purple-300",
+        "badge": "#8B5CF6",
+        "glow": "shadow-[0_0_15px_rgba(139,92,246,0.3)]"
+      },
+      "gift_card": {
+        "bg": "bg-cyan-950/80 border-cyan-500/50 text-cyan-300",
+        "badge": "#06B6D4",
+        "glow": "shadow-[0_0_15px_rgba(6,182,212,0.3)]"
+      },
+      "heavy_discount": {
+        "bg": "bg-emerald-950/80 border-emerald-500/50 text-emerald-300",
+        "badge": "#10B981",
+        "glow": "shadow-[0_0_15px_rgba(16,185,129,0.3)]"
+      },
+      "loot_price_error": {
+        "bg": "bg-rose-950/80 border-rose-500/50 text-rose-300",
+        "badge": "#F43F5E",
+        "glow": "shadow-[0_0_15px_rgba(244,63,94,0.4)]"
+      }
+    },
+    "brand_accents": {
+      "flipkart_yellow": "#FFC200",
+      "telegram_blue": "#229ED9",
+      "sankmo_green": "#10B981",
+      "alert_red": "#EF4444"
+    }
+  },
+  "typography": {
+    "heading_font": "Outfit, Plus Jakarta Sans, sans-serif",
+    "body_font": "Inter, DM Sans, sans-serif",
+    "mono_font": "JetBrains Mono, monospace",
+    "hierarchy": {
+      "h1": "text-4xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight",
+      "h2": "text-2xl sm:text-3xl lg:text-4xl font-bold tracking-tight",
+      "h3": "text-xl sm:text-2xl font-semibold",
+      "h4": "text-lg sm:text-xl font-medium",
+      "body": "text-base leading-relaxed",
+      "caption": "text-xs font-mono uppercase tracking-wider"
+    }
+  },
+  "layout_and_structure": {
+    "public_deals_site": {
+      "header": "Fixed z-50 glassmorphism navbar (bg-slate-950/80 backdrop-blur-xl border-b border-slate-800) with Live Telemetry Ticker, Search bar, Category Filters, Mode Toggle, and 'Admin Control' quick link",
+      "hero_banner": "Asymmetric bento section highlighting '100% SuperCoin Drops', 'Flash Price Errors', live Telegram channel stats, and Sankmo auto-link status",
+      "filter_bar": "Sticky category pills (All Deals, Flipkart 100% SuperCoins, Gift Cards, 70%+ Off, Price Errors, Myntra/Amazon) with Sorting (Discount %, Price Low-High, Latest)",
+      "deal_grid": "Grid layout (grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6) of interactive Deal Cards",
+      "deal_card": {
+        "structure": "Product thumbnail, Store logo badge (Flipkart, Amazon, Paytm, Myntra), Discount % Pill, Category Badge, Title, Old MRP vs Drop Price, Price Graph sparkline, Direct Buy/Grab Deal button (Sankmo transformed affiliate link), Copy Link button, Share to Telegram button"
+      }
+    },
+    "admin_dashboard": {
+      "layout": "Sidebar / Top Tabbed Control Panel with 6 main operational tabs:",
+      "tabs": [
+        {
+          "name": "Sources",
+          "description": "Manage incoming sources (Public Telegram Channels, RSS Feeds, Twitter/X scrapers). Ability to add channel username (@deal_channel), test fetch, enable/disable auto-scraping toggle"
+        },
+        {
+          "name": "Destinations",
+          "description": "Configure outgoing Telegram Bots and Channels. Set Bot Token, Chat ID, custom channel rules (min discount %, filter categories: only SuperCoin, only GiftCards)"
+        },
+        {
+          "name": "Rules & Filter Engine",
+          "description": "Global auto-posting thresholds (e.g., Minimum Gift Card discount 15%, SuperCoin 100% auto-broadcast, Price Error auto-ping)"
+        },
+        {
+          "name": "Manual Deal Add",
+          "description": "Instant deal poster with URL input, auto-scraper metadata preview, custom title, price, MRP, category tag, and 'Post to Telegram & Web' trigger"
+        },
+        {
+          "name": "Sankmo API & Converter",
+          "description": "Sankmo Affiliate API key/token configuration, API endpoint URL, test URL converter input box, link transformation log"
+        },
+        {
+          "name": "Post Logs & Telemetry",
+          "description": "Live dispatch log showing deal ID, destination channel, converted affiliate URL, Telegram response status, timestamp"
+        }
+      ]
+    }
+  },
+  "image_urls": {
+    "hero_shopping_deal": "https://images.unsplash.com/photo-1607083206869-4c7672e72a8a?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1MDZ8MHwxfHNlYXJjaHw0fHxzaG9wcGluZyUyMGRlYWwlMjBnaWZ0Y2FyZCUyMHNob3BwaW5nJTIwZS1jb21tZXJjZSUyMGRpc2NvdW50JTIwb2ZmZXJ8ZW58MHx8fHwxNzkzMzkxNTUxfDA&ixlib=rb-4.1.0&q=85",
+    "giftcard_promotions": "https://images.pexels.com/photos/7957753/pexels-photo-7957753.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+    "discount_sale_flatlay": "https://images.pexels.com/photos/7987589/pexels-photo-7987589.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+    "ecommerce_mobile_shopping": "https://images.unsplash.com/photo-1612103198005-b238154f4590?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1MDZ8MHwxfHNlYXJjaHwxfHxzaG9wcGluZyUyMGRlYWwlMjBnaWZ0Y2FyZCUyMHNob3BwaW5nJTIwZS1jb21tZXJjZSUyMGRpc2NvdW50JTIwb2ZmZXJ8ZW58MHx8fHwxNzkzMzkxNTUxfDA&ixlib=rb-4.1.0&q=85"
+  },
+  "key_features_to_implement": [
+    "Full Public Deal Feed with real-time category filtering (SuperCoin 100%, Gift Cards, Heavy Discount, Price Drop)",
+    "Search functionality for deals by store name or title",
+    "Sankmo Link Converter Engine: Automatically converts direct e-commerce URLs (Flipkart/Amazon) into affiliate earning links before posting",
+    "Telegram Bot Engine: Post deals directly to connected Telegram channels with customized message templates",
+    "Multi-Source Channel Auto-Fetch Simulator/Scraper: Add public Telegram channel handles to monitor & automatically extract deals",
+    "Multi-Destination Router: Route SuperCoin deals to specific Telegram channels and Gift Cards to others based on threshold rules",
+    "Manual Deal Posting Form with automatic metadata preview (Title, Price, Discount calculation)",
+    "Post Log audit trail showing status (Success/Failed), destination, timestamp, and converted Sankmo URL",
+    "Indian currency (₹ INR) formatting throughout"
+  ],
+  "testing_requirements": {
+    "mandatory_data_testids": [
+      "public-deals-nav-link",
+      "admin-dashboard-nav-link",
+      "category-filter-all",
+      "category-filter-supercoin",
+      "category-filter-giftcards",
+      "category-filter-heavy-discount",
+      "deal-search-input",
+      "grab-deal-button",
+      "admin-tab-sources",
+      "admin-tab-destinations",
+      "admin-tab-rules",
+      "admin-tab-manual-add",
+      "admin-tab-sankmo",
+      "admin-tab-logs",
+      "add-source-input",
+      "add-source-submit-button",
+      "add-destination-bot-token-input",
+      "add-destination-chat-id-input",
+      "add-destination-submit-button",
+      "sankmo-token-input",
+      "sankmo-save-button",
+      "manual-deal-url-input",
+      "manual-deal-submit-button"
+    ]
+  },
+  "instructions_to_main_agent": [
+    "Build a complete, fully operational React frontend using `.js` / `.jsx` files and a FastAPI backend.",
+    "Ensure ALL files created use JavaScript syntax (.js/.jsx) - do NOT create TypeScript (.ts/.tsx) files.",
+    "Implement comprehensive seed data for deals: Flipkart 100% SuperCoin offers, Amazon price drop bugs, Swiggy/Zomato/Paytm gift card 20% cashback drops, Myntra flash sales.",
+    "Integrate Sankmo API URL transformer utility with fallback mock URL generator (e.g. converting `flipkart.com/item...` to `sankmo.com/redirect?url=...&affid=...`)",
+    "Ensure dropdowns, dialogs, and overlays NEVER have transparent backgrounds (use solid bg-slate-900 or bg-slate-950 with border-slate-800).",
+    "Ensure all buttons, tabs, inputs, and links have explicit hover/active states with contrasting text colors.",
+    "Provide toast notifications via `sonner` when deals are copied, manually added, sources updated, or Sankmo tokens saved."
+  ],
+  "UNIVERSAL GUIDELINES FOR MAIN AGENT": {
+    "rule_1": "Do not create TypeScript (.ts/.tsx) files. The codebase relies on .js and .jsx files.",
+    "rule_2": "Ensure all interactive elements have data-testid attributes matching kebab-case naming.",
+    "rule_3": "Do not use transparent background on dropdowns, modals, or popovers. Always set bg-slate-900 / bg-slate-950.",
+    "rule_4": "Never use pure #000000; use rich dark tones like #0A0E17, #111827, and #161F30 for surfaces.",
+    "rule_5": "Keep all currency amounts formatted in Indian Rupees (₹) with proper comma separators."
+  }
+}

@@ -1,0 +1,8 @@
+crons:
+  - name: fetch-deals
+    description: "Checks all deal sources every 15 minutes and auto-posts matching deals to Telegram"
+    cron: "*/15 * * * *"
+    endpoint: "{{BASE_URL}}/api/cron/fetch"
+    method: POST
+    # Cron endpoints must ack 2xx immediately; enqueue/background the actual work.
+    enabled: true
