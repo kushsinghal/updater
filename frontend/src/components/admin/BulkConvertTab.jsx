@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Panel, primaryBtn, ghostBtn, fieldCls } from "./Panel";
 
+const MAX = 10;
 const btn = "flex items-center gap-1.5 rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 transition-colors hover:bg-slate-200";
 const toDeal = (it) => ({ title: it.title, price: it.price, mrp: it.mrp, store: it.store, image: it.image, link: it.converted,
   preview: it.share_code ? previewUrl(it.share_code) : null });
@@ -31,7 +32,7 @@ const CopySettings = () => {
       className={`rounded-full border px-4 py-1.5 text-xs font-semibold transition-colors ${style === v ? "border-slate-900 bg-slate-900 text-white" : "border-slate-300 text-slate-700"}`}>{label}</button>
   );
   return (
-    <Panel testid="copy-settings-panel" title="Copy & share settings" desc="Top line is added when you copy all deals (1, 2 or 5). Picture links show the product photo in Telegram/WhatsApp and open your affiliate link.">
+    <Panel testid="copy-settings-panel" title="Copy & share settings" desc="Top line is added when you copy all deals (1 to 10). Picture links show the product photo in Telegram/WhatsApp and open your affiliate link.">
       <div className="space-y-3">
         <div className="flex gap-2">
           <Input data-testid="copy-header-input" value={header} onChange={(e) => setHeader(e.target.value)} placeholder="Top line (empty = none)" className={fieldCls} />
@@ -93,23 +94,35 @@ export const BulkConvertTab = () => {
   const [res, setRes] = useState(null);
   const [busy, setBusy] = useState(false);
   const run = async () => {
-    setBusy(true);
+    const urls = [...new Set((text.match(/https?:\/\/[^\s<>"')\]]+/g) || []).map((u) => u.replace(/[.,;!]+$/, "")).filter((u) => !u.includes("t.me/")))];
+    if (!urls.length) return toast.error("No links found. Paste one or more deal links.");
+    const batch = urls.slice(0, MAX), chunks = [];
+    for (let k = 0; k < batch.length; k += 3) chunks.push(batch.slice(k, k + 3));
+    setBusy(`0/${batch.length}`);
     try {
-      const { data } = await api.post("/convert/bulk", { text });
-      setRes(data);
-      if (data.skipped.length) toast.warning(`Found ${data.total_found} links — converted the first 5. Run again for the rest.`);
+      const items = [];
+      for (const c of chunks) {
+        const { data } = await api.post("/convert/bulk", { text: c.join("\n"), base: process.env.REACT_APP_BACKEND_URL });
+        items.push(...data.items);
+        setBusy(`${items.length}/${batch.length}`);
+      }
+      const map = Object.fromEntries(items.map((it) => [it.original, it.converted]));
+      const pattern = new RegExp([...batch].sort((a, b) => b.length - a.length).map((u) => u.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|"), "g");
+      const skipped = urls.slice(MAX);
+      setRes({ items, message: text.replace(pattern, (m) => map[m] || m).trim(), total_found: urls.length, skipped });
+      if (skipped.length) toast.warning(`Found ${urls.length} links — converted the first ${MAX}. Load the next batch for the rest.`);
     } catch (e) { toast.error(errMsg(e)); } finally { setBusy(false); }
   };
   const nextBatch = () => { setText(res.skipped.join("\n")); setRes(null); };
   return (
     <div className="space-y-6">
-      <Panel testid="bulk-convert-panel" title="Convert up to 5 links at once"
+      <Panel testid="bulk-convert-panel" title="Convert up to 10 links at once"
         desc="Paste links or a whole deal message from anyone. Their tracking is removed, then each link becomes yours (Amazon: your tag, others: Sankmo).">
         <Textarea data-testid="bulk-input" value={text} onChange={(e) => setText(e.target.value)} rows={7}
           placeholder={"Paste here, e.g.\nBoat earbuds at 399 https://fkrt.it/xyz\nhttps://amzn.to/abc"} className="rounded-xl border-slate-300 bg-[#F5F2EA] font-mono text-xs" />
         <div className="mt-3 flex flex-wrap gap-2">
-          <Button data-testid="bulk-convert-button" className={primaryBtn} disabled={busy || !text.trim()} onClick={run}>{busy ? "Converting… (up to a minute)" : "Convert links"}</Button>
-          {res?.skipped?.length > 0 && <Button data-testid="bulk-next-batch-button" className={ghostBtn} onClick={nextBatch}>Load next {Math.min(res.skipped.length, 5)} links</Button>}
+          <Button data-testid="bulk-convert-button" className={primaryBtn} disabled={busy || !text.trim()} onClick={run}>{busy ? `Converting… ${busy} done` : "Convert links"}</Button>
+          {res?.skipped?.length > 0 && <Button data-testid="bulk-next-batch-button" className={ghostBtn} onClick={nextBatch}>Load next {Math.min(res.skipped.length, MAX)} links</Button>}
         </div>
       </Panel>
       {res && (

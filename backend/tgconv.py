@@ -64,8 +64,39 @@ async def _convert(url, settings, timeout):
     raise ValueError("Sankmo bot did not return a link")
 
 
-async def convert_via_bot(url, settings, timeout=25):
+async def convert_via_bot(url, settings, timeout=18):
     if not settings.get("tg_session"):
         raise ValueError("Telegram account not connected")
     async with _lock:
         return await asyncio.wait_for(_convert(url, settings, timeout), timeout + 15)
+
+
+async def _preview(client, url):
+    from telethon import functions
+    for _ in range(6):
+        r = await client(functions.messages.GetWebPagePreviewRequest(message=url))
+        wp = getattr(getattr(r, "media", r), "webpage", None)
+        if type(wp).__name__ != "WebPagePending":
+            break
+        await asyncio.sleep(2)
+    if type(wp).__name__ != "WebPage":
+        return None
+    photo = await client.download_media(wp.photo, file=bytes) if getattr(wp, "photo", None) else None
+    return {"title": wp.title, "photo": photo}
+
+
+async def web_previews(urls, settings, timeout=25):
+    """Ask Telegram (which stores don't block) for link previews: title + product photo."""
+    if not settings.get("tg_session") or not urls:
+        return {}
+    client = TelegramClient(StringSession(settings["tg_session"]), int(settings["tg_api_id"]), settings["tg_api_hash"])
+    await client.connect()
+    try:
+        if not await client.is_user_authorized():
+            return {}
+        res = await asyncio.wait_for(asyncio.gather(*[_preview(client, u) for u in urls], return_exceptions=True), timeout)
+        return {u: r for u, r in zip(urls, res) if isinstance(r, dict)}
+    except asyncio.TimeoutError:
+        return {}
+    finally:
+        await client.disconnect()

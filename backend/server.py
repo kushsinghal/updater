@@ -31,7 +31,7 @@ logger = logging.getLogger("deals")
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 
 NO_ID = {"_id": 0}
-BULK_MAX = 5
+BULK_MAX = 10
 DEFAULT_SETTINGS = {
     "id": "main", "auto_post": True, "supercoin_enabled": True, "giftcard_enabled": True, "giftcard_min": 5,
     "product_enabled": True, "product_min": 70, "loot_enabled": True, "keywords": [],
@@ -98,6 +98,7 @@ class SettingsIn(BaseModel):
 
 class BulkIn(BaseModel):
     text: str
+    base: Optional[str] = None
 
 
 class TgCodeIn(BaseModel):
@@ -733,6 +734,8 @@ async def convert_bulk(body: BulkIn):
     settings = await get_settings()
     cleaned = await asyncio.gather(*[engine.clean_link(u) for u in links])
     infos = await asyncio.gather(*[deal_info(c) for c in cleaned])
+    missing = list(dict.fromkeys(c for c, i in zip(cleaned, infos) if not i["image"] and engine.detect_store(c) != "Amazon"))
+    previews = asyncio.create_task(tgconv.web_previews(missing, settings)) if missing and body.base else None
     items, swaps = [], []
     for orig, clean, info in zip(links, cleaned, infos):
         err = None
@@ -750,6 +753,8 @@ async def convert_bulk(body: BulkIn):
         await db.links.insert_one({"code": code, "url": out, "store": store, **info, "created_at": now()})
         items.append({"original": orig, "cleaned": clean, "converted": out, "changed": out != clean, "error": err,
                       "store": store, "share_code": code, **info})
+    if previews:
+        await fill_pictures(items, await previews, body.base.rstrip("/"))
     lookup = dict(swaps)
     pattern = "|".join(re.escape(o) for o, _ in sorted(swaps, key=lambda x: -len(x[0])))
     message = re.sub(pattern, lambda m: lookup[m.group(0)], body.text)
@@ -768,6 +773,32 @@ def preview_html(url, title, image, price=None, mrp=None, store=None):
 <meta name="viewport" content="width=device-width,initial-scale=1"></head>
 <body style="font-family:sans-serif;text-align:center;padding:40px"><p>Opening deal…</p><a href="{h(url)}">Tap here if not redirected</a>
 <script>location.replace({json.dumps(url)})</script></body></html>""")
+
+
+async def fill_pictures(items, previews, base):
+    saved = {}
+    for it in items:
+        p = previews.get(it["cleaned"])
+        if not p or it["image"]:
+            continue
+        if p.get("photo") and it["cleaned"] not in saved:
+            pid = uuid.uuid4().hex
+            await db.images.insert_one({"id": pid, "data": p["photo"], "ctype": "image/jpeg", "created_at": now()})
+            saved[it["cleaned"]] = f"{base}/api/img/{pid}"
+        ptitle = html_lib.unescape(p.get("title") or "")
+        if re.search(r"Online Shopping|Best Price in India - All Categories|^Flipkart", ptitle):
+            ptitle = ""
+        upd = {"image": saved.get(it["cleaned"]), "title": it["title"] or ptitle or None}
+        it.update(upd)
+        await db.links.update_one({"code": it["share_code"]}, {"$set": upd})
+
+
+@api.get("/img/{pid}")
+async def stored_image(pid: str):
+    d = await db.images.find_one({"id": pid}, NO_ID)
+    if not d:
+        raise HTTPException(404, "Image not found")
+    return Response(content=d["data"], media_type=d["ctype"], headers={"Cache-Control": "public, max-age=604800"})
 
 
 @api.get("/go/d/{deal_id}")
