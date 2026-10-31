@@ -248,17 +248,21 @@ async def enrich(deal_id):
         upd.update({"ph_min": ph.get("min"), "ph_max": ph.get("max"), "ph_avg": ph.get("avg"), "ph_url": ph.get("page_url")})
         if not d.get("image") and ph.get("image"):
             upd["image"] = ph["image"]
-        price = d.get("price") or ph.get("price")
+        manual = d.get("source_id") == "manual" and d.get("price")
+        price, mrp = d.get("text_price", d.get("price")), d.get("text_mrp", d.get("mrp"))
         ref = ph.get("min") or ph.get("price")
-        if d.get("price") and ref and d["price"] < ref * 0.3:
-            price = None
-            upd["price"] = ph.get("price")
-            upd["lowest_ever"] = False
-        elif not d.get("price") and ph.get("price"):
-            upd["price"] = ph["price"]
-            if ph.get("mrp") and ph["mrp"] > ph["price"]:
-                upd["mrp"] = ph["mrp"]
-                upd["discount"] = max(d.get("discount") or 0, round((1 - ph["price"] / ph["mrp"]) * 100, 1))
+        if price and ref and price < ref * 0.3 and not manual:
+            price, mrp = None, None
+        if not price:
+            price = ph.get("price")
+        if not mrp and ph.get("mrp") and not manual:
+            mrp = ph["mrp"]
+        if price and mrp and mrp <= price * 1.03:
+            mrp = None
+        discount = d.get("discount") if manual else engine.extract_discount(d.get("text", ""), price, mrp)
+        settings = await get_settings()
+        cats = d.get("categories") if d.get("source_id") == "manual" else engine.classify(d.get("text", ""), discount, settings)
+        upd.update({"price": price, "mrp": mrp, "discount": discount, "categories": cats})
         if price and ph.get("min"):
             upd["lowest_ever"] = price <= ph["min"]
     await db.deals.update_one({"id": deal_id}, {"$set": upd})
@@ -281,7 +285,8 @@ async def ingest(parsed, source, settings, autopost, budget=None):
     if source["id"] != "manual" and age_minutes(posted_at) > settings.get("website_max_age_hours", 24) * 60:
         return None
     deal = {**parsed, "id": str(uuid.uuid4()), "dedupe_key": key, "source": source.get("name"),
-            "source_id": source["id"], "posted_to": [], "created_at": now(), "posted_at": posted_at}
+            "source_id": source["id"], "posted_to": [], "created_at": now(), "posted_at": posted_at,
+            "text_price": parsed.get("price"), "text_mrp": parsed.get("mrp")}
     if "dealsmagnet.com/deal" in deal["url"]:
         try:
             deal["url"], dm_img = await engine.resolve_dealsmagnet(deal["url"])
@@ -690,6 +695,30 @@ async def convert(body: ConvertIn):
                 "store": engine.detect_store(cleaned)}
 
 
+def link_context(text, link):
+    """Text that belongs to a link: from the previous link up to this one, plus the rest of its line."""
+    i = text.find(link)
+    if i < 0:
+        return ""
+    prev = [m.end() for m in engine.URL_RE.finditer(text[:i])]
+    start = prev[-1] if prev else 0
+    end = text.find("\n", i)
+    return text[start:i] + (text[i + len(link):end] if end > 0 else text[i + len(link):])
+
+
+def apply_post_price(info, context):
+    """The deal price written in the post (after coupons/cards) beats the store's current price."""
+    price, mrp = engine.extract_prices(context)
+    if not price:
+        return
+    store_price = info.get("price")
+    info["store_price"] = store_price
+    info["price"] = price
+    info["mrp"] = mrp or info.get("mrp") or store_price
+    if info["mrp"] and info["mrp"] <= price * 1.03:
+        info["mrp"] = None
+
+
 async def deal_info(url):
     info = {"title": None, "image": None, "price": None, "mrp": None}
     keys = [engine.product_key(url)]
@@ -699,10 +728,12 @@ async def deal_info(url):
     known = await db.deals.find_one({"$or": [{"product_key": {"$in": keys}}, {"clean_url": {"$regex": re.escape(itm.group(1))}} if itm else {"clean_url": url}],
                                      "image": {"$ne": None}}, NO_ID, sort=[("posted_at", -1)])
     if known:
-        info.update({"title": known.get("title"), "image": known.get("image"), "price": known.get("price"), "mrp": known.get("mrp")})
+        info.update({"image": known.get("image")})
     ph = await ph_data(url)
     if ph:
         info.update({k: info[k] or ph.get(src) for k, src in [("title", "name"), ("image", "image"), ("price", "price"), ("mrp", "mrp")]})
+    if known and not info["title"]:
+        info["title"] = known.get("title")
     if not info["image"] and "flipkart" not in url:
         info["image"] = await engine.fetch_og_image(url)
     if info["title"]:
@@ -734,6 +765,8 @@ async def convert_bulk(body: BulkIn):
     settings = await get_settings()
     cleaned = await asyncio.gather(*[engine.clean_link(u) for u in links])
     infos = await asyncio.gather(*[deal_info(c) for c in cleaned])
+    for link, info in zip(links, infos):
+        apply_post_price(info, link_context(body.text, link))
     missing = list(dict.fromkeys(c for c, i in zip(cleaned, infos) if not i["image"] and engine.detect_store(c) != "Amazon"))
     base = body.base.rstrip("/") if body.base and re.match(r"https://[\w.-]+$", body.base.rstrip("/")) else None
     items, swaps = [], []
@@ -985,6 +1018,34 @@ async def seed():
     async for d in db.deals.find({"score": {"$exists": False}}, NO_ID):
         await db.deals.update_one({"id": d["id"]}, {"$set": {"score": engine.score(d), "featured": False}})
     await retag_amazon(settings.get("amazon_tag", ""))
+    if not settings.get("prices_v2"):
+        asyncio.create_task(reprice_all())
+    asyncio.create_task(fix_deal_site_links())
+
+
+async def fix_deal_site_links():
+    """Re-resolve deals whose link is a deal-site page (e.g. desidime) instead of the store."""
+    s = await get_settings()
+    async for d in db.deals.find({"clean_url": {"$regex": "|".join(re.escape(x) for x in engine.DEAL_SITES)}}, NO_ID):
+        clean = await engine.clean_link(d["clean_url"])
+        aff = await safe_convert(clean, s)
+        await db.deals.update_one({"id": d["id"]}, {"$set": {"clean_url": clean, "affiliate_url": aff, "converted": aff != clean,
+                                                            "store": engine.detect_store(clean, d.get("text", ""))}})
+
+
+async def reprice_all():
+    """One-time repair of prices parsed by the old parser."""
+    s = await get_settings()
+    async for d in db.deals.find({"source_id": {"$ne": "manual"}}, NO_ID):
+        price, mrp = engine.extract_prices(d.get("text", ""))
+        disc = engine.extract_discount(d.get("text", ""), price, mrp)
+        await db.deals.update_one({"id": d["id"]}, {"$set": {
+            "text_price": price, "text_mrp": mrp, "price": price, "mrp": mrp, "discount": disc,
+            "categories": engine.classify(d.get("text", ""), disc, s)}})
+        await enrich(d["id"])
+        fresh = await db.deals.find_one({"id": d["id"]}, NO_ID)
+        await db.deals.update_one({"id": d["id"]}, {"$set": {"score": engine.score(fresh)}})
+    await db.settings.update_one({"id": "main"}, {"$set": {"prices_v2": True}})
 
 
 app.include_router(api)

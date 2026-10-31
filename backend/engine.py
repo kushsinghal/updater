@@ -7,7 +7,7 @@ from bs4 import BeautifulSoup
 UA = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124 Safari/537.36"}
 URL_RE = re.compile(r'https?://[^\s<>"\')\]]+')
 AMOUNT_RE = re.compile(r'(?:₹|rs\.?|inr)\s*([\d,]+(?:\.\d+)?)|([\d,]+(?:\.\d+)?)\s*(?:₹|/-)', re.I)
-MRP_RE = re.compile(r'(?:mrp|regular price|original price|worth|was|actual price)\s*[:@\-]?\s*(?:₹|rs\.?|inr)?\s*([\d,]+)', re.I)
+MRP_RE = re.compile(r'(?:mrp|regular price|original price|worth|\bwas\b|actual price)\s*[:@\-]?\s*(?:₹|rs\.?|inr)?\s*([\d,]*\d)(\s*k\b)?', re.I)
 PCT_RE = re.compile(r'(?:flat|upto|up to|get)?\s*(\d{1,2}(?:\.\d+)?)\s*%\s*(?:off|discount|cashback|instant|savings)', re.I)
 FLAT_PCT_RE = re.compile(r'flat\s*(\d{1,2})\s*%', re.I)
 SUPERCOIN_RE = re.compile(r'100\s*%\s*(?:off\s*)?(?:via|with|using|by|on|through)?\s*super\s*coins?|super\s*coins?.{0,40}100\s*%|full\s*super\s*coins?', re.I | re.S)
@@ -55,28 +55,46 @@ def detect_store(url, text=""):
     return "Other"
 
 
+NUM = r'(?:₹|rs\.?|inr)?\s*([\d,]*\d(?:\.\d+)?)(\s*k\b)?'
+STRONG_RE = re.compile(r'(?:offer\s*price|deal\s*price|effective(?:ly)?(?:\s*price)?(?:\s*will\s*be)?(?:\s*around)?|price\s*[:\-]|@)\s*[:\-]?\s*' + NUM, re.I)
+WEAK_RE = re.compile(r'(?:\bat|\bonly|\bjust|\bstarts?(?:\s*from)?|\bfrom|\bloot|\bfor)\s*[:\-@]?\s*' + NUM, re.I)
+BARE_RE = re.compile(r'(?:₹|rs\.?|inr)\s*([\d,]*\d(?:\.\d+)?)(\s*k\b)?|([\d,]*\d)\s*(?:₹|/-)()', re.I)
+NOISE_LINE = re.compile(r'coupon|cashback|\bbank\b|hdfc|sbi|icici|axis|kotak|\bcc\b|credit|debit|\bemi\b|\bcode\b|exchange\s*(?:offer|bonus)|above|min\.?\s*order|up\s*to|upto|\bflat\b|\bsave\b|voucher|cred\b|perk', re.I)
+AFTER_BAD = re.compile(r'^\s*(?:%|off\b|cashback|coupon|discount|back\b|instant|extra|super\s*coins?|gm\b|grams?\b|g\b|kg\b|ml\b|l\b|ltr|litre|hp\b|w\b|watt|cm\b|mm\b|gb\b|tb\b|mah|inch|°|pcs|pieces|days?\b|months?\b|years?\b|x\b)', re.I)
+INVISIBLE = re.compile(r'[\u200b-\u200f\u202a-\u202e\u2060\ufeff]')
+
+
+def _amounts(regex, text, check_noise):
+    out = []
+    for line in text.splitlines():
+        if check_noise and NOISE_LINE.search(line):
+            continue
+        for m in regex.finditer(line):
+            if AFTER_BAD.match(line[m.end():]):
+                continue
+            raw = m.group(1) or (m.group(3) if m.lastindex and m.lastindex >= 3 else None)
+            v = to_num(raw)
+            if v and m.group(2):
+                v *= 1000
+            if v and 5 <= v <= 5_000_000:
+                out.append(v)
+    return out
+
+
 def extract_prices(text):
+    text = INVISIBLE.sub("", text)
     mrp_m = MRP_RE.search(text)
     mrp = to_num(mrp_m.group(1)) if mrp_m else None
-    amounts = []
-    for m in AMOUNT_RE.finditer(text):
-        after = text[m.end():m.end() + 6].lower()
-        if "off" in after:
-            continue
-        v = to_num(m.group(1) or m.group(2))
-        if v and v >= 5:
-            amounts.append(v)
+    if mrp and mrp_m.group(2):
+        mrp *= 1000
+    text = MRP_RE.sub(" ", text)
     price = None
-    for a in amounts:
-        if a != mrp:
-            price = a
+    for regex, noisy in ((STRONG_RE, False), (WEAK_RE, True), (BARE_RE, True)):
+        found = [a for a in _amounts(regex, text, noisy) if a != mrp]
+        if found:
+            price = found[0]
             break
-    if mrp is None and len(amounts) >= 2 and price is not None and max(amounts) > price:
-        mrp = max(amounts)
-    if price is None:
-        m = re.search(r'(?:loot|@|\bat|price|only|just|deal)\s*:?\s*([\d,]{2,7})(?!\s*%)\b', text, re.I)
-        price = to_num(m.group(1)) if m else None
-    if price is not None and mrp is not None and mrp <= price:
+    if price is not None and mrp is not None and mrp <= price * 1.02:
         mrp = None
     return price, mrp
 
@@ -355,12 +373,24 @@ async def clean_link(url):
                             break
                         continue
                     found = [u for u in URL_RE.findall(r.text) if detect_store(u) != "Other"]
+                    visit = re.findall(r'https://visit\.desidime\.com/visit/[^"\'\s<>]+', r.text)
+                    if not found and visit and "desidime.com" in url:
+                        url = next((v for v in visit if "buy-now" in v), None) or next((v for v in visit if "/deals-" in v), visit[0])
+                        continue
                     if found:
                         url = _unwrap(found[0])
                     break
         except Exception:
             pass
     return strip_affiliate(url)
+
+
+DEAL_SITES = ["desidime.com", "ddime.in", "dealsmagnet.com", "dealsheaven.in", "coolztricks.com", "freekaamaal.com",
+              "t.me/", "telegram.me", "lootdeals", "dealzarena", "indiafreestuff"]
+
+
+def is_deal_site(url):
+    return any(d in (url or "").lower() for d in DEAL_SITES)
 
 
 def score(deal):
@@ -389,7 +419,7 @@ def amazon_affiliate(url, tag):
 
 
 async def convert_link(url, settings):
-    if not settings.get("convert_enabled", True):
+    if not settings.get("convert_enabled", True) or is_deal_site(url):
         return url
     if is_amazon(url):
         return amazon_affiliate(url, settings.get("amazon_tag"))

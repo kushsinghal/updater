@@ -9,6 +9,16 @@ import { Button } from "@/components/ui/button";
 import { Panel, primaryBtn, ghostBtn, fieldCls } from "./Panel";
 
 const MAX = 10;
+const URL_G = /https?:\/\/[^\s<>"')\]]+/g;
+const linkContext = (text, link) => {
+  const i = text.indexOf(link);
+  if (i < 0) return "";
+  const before = text.slice(0, i);
+  let start = 0;
+  for (const m of before.matchAll(URL_G)) start = m.index + m[0].length;
+  const end = text.indexOf("\n", i);
+  return (before.slice(start) + (end > 0 ? text.slice(i + link.length, end) : text.slice(i + link.length))).replace(URL_G, " ").trim();
+};
 const btn = "flex items-center gap-1.5 rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 transition-colors hover:bg-slate-200";
 const toDeal = (it) => ({ title: it.title, price: it.price, mrp: it.mrp, store: it.store, image: it.image, link: it.converted,
   preview: it.share_code ? previewUrl(it.share_code) : null });
@@ -70,6 +80,8 @@ const ResultCard = ({ it, i, onImage }) => {
         <div className="flex flex-wrap items-center gap-2">
           <span className="rounded bg-slate-900 px-2 py-0.5 font-mono text-[10px] uppercase text-white">{it.store}</span>
           {it.price && <span className="text-sm font-bold">{inr(it.price)}</span>}
+          {it.mrp && <span className="text-xs text-slate-400 line-through">{inr(it.mrp)}</span>}
+          {it.store_price && it.store_price !== it.price && <span data-testid={`bulk-store-price-${i}`} className="text-[11px] text-slate-500">store now {inr(it.store_price)} (before offers)</span>}
           <span data-testid={`bulk-status-${i}`} className={`text-xs font-semibold ${it.changed ? "text-emerald-700" : "text-amber-600"}`}>
             {it.changed ? (it.store === "Amazon" ? "Your Amazon tag added" : "Converted to your Sankmo link") : it.error}
           </span>
@@ -102,7 +114,8 @@ export const BulkConvertTab = () => {
     try {
       const items = [];
       for (const c of chunks) {
-        const { data } = await api.post("/convert/bulk", { text: c.join("\n"), base: process.env.REACT_APP_BACKEND_URL });
+        const body = c.map((u) => `${linkContext(text, u)}\n${u}`).join("\n");
+        const { data } = await api.post("/convert/bulk", { text: body, base: process.env.REACT_APP_BACKEND_URL });
         items.push(...data.items);
         setBusy(`${items.length}/${batch.length}`);
       }
