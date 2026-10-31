@@ -690,13 +690,32 @@ async def convert(body: ConvertIn):
 
 
 async def deal_info(url):
-    ph = await ph_data(url)
     info = {"title": None, "image": None, "price": None, "mrp": None}
+    known = await db.deals.find_one({"product_key": engine.product_key(url), "image": {"$ne": None}}, NO_ID, sort=[("posted_at", -1)])
+    if known:
+        info.update({"title": known.get("title"), "image": known.get("image"), "price": known.get("price"), "mrp": known.get("mrp")})
+    ph = await ph_data(url)
     if ph:
-        info.update({"title": ph.get("name"), "image": ph.get("image"), "price": ph.get("price"), "mrp": ph.get("mrp")})
-    if not info["image"]:
+        info.update({k: info[k] or ph.get(src) for k, src in [("title", "name"), ("image", "image"), ("price", "price"), ("mrp", "mrp")]})
+    if not info["image"] and "flipkart" not in url:
         info["image"] = await engine.fetch_og_image(url)
+    if info["title"]:
+        info["title"] = html_lib.unescape(info["title"]).strip()
     return info
+
+
+class LinkImageIn(BaseModel):
+    image: str
+
+
+@api.put("/go/{code}")
+async def set_link_image(code: str, body: LinkImageIn):
+    if not body.image.startswith("http"):
+        raise HTTPException(400, "Paste a full picture link (https://…)")
+    res = await db.links.update_one({"code": code}, {"$set": {"image": body.image.strip()}})
+    if not res.matched_count:
+        raise HTTPException(404, "Link not found")
+    return {"ok": True}
 
 
 @api.post("/convert/bulk")

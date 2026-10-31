@@ -1,0 +1,34 @@
+{
+  "summary": "Tested picture-preview share links and the editable copy header. Backend: 11/11 pytest pass. /convert/bulk returns an 8-char share_code. /go/{code} and /go/d/{id} return HTML with og:title/og:description/og:image and location.replace() to the affiliate link, and 404 for unknown ids. Settings copy_header/copy_link_style work (empty header persists; an invalid style returns 422). Flipkart converts to fkrt.site through Sankmo. Frontend: 'Copy all' with 1 and 2 links puts the header first, then Deal Price/MRP/Store blocks with '<BACKEND_URL>/api/go/<code>' links. TEST HEADER, direct style (fkrt.site/amazon links) and empty header (no header line) all work. The deals page copy uses /api/go/d/{id}. The per-link buttons don't crash. One real UI bug: the Copy settings panel shows stale default values after a page load.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/convert/bulk (deal_info)", "issue": "Flipkart URLs without a pid (e.g. /tommy-hilfiger-.../p/itm2f049aec7e6b6) get title/image/price = null, because pricehistory misses them and Flipkart blocks the og:image fetch. Those /go/ pages have no og:image, so the user's main ask (a picture in Telegram) fails for such links. Consider resolving the image from the converted fkrt link, or from the Flipkart page with a better UA, or letting the user paste an image URL."},
+      {"endpoint": "POST /api/convert/bulk (deal_info title)", "issue": "Amazon title contains an HTML entity that is not decoded: 'Parachute Advansed Protein Shampoo with Coconut Milk &amp'. Run html.unescape on scraped titles."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "BulkConvertTab.jsx CopySettings", "issue": "useState(prefs.header)/useState(prefs.style) is set once at mount. On direct load of /admin, Convert Links is the default tab, so it mounts before App's async loadPrefs() resolves. Repro: PUT settings copy_header='X CUSTOM', style='direct', then load /admin: the input shows the default '🪙 100% SuperCoin Deals 🪙' and 'preview' is highlighted. Copying still uses the right prefs, but if the user clicks a style button or Save, the stale header is sent and their custom header is OVERWRITTEN. Fix: fetch /settings in CopySettings on mount (useEffect → setHeader/setStyle), or await loadPrefs before rendering.", "selector": "[data-testid=copy-header-input], [data-testid=copy-style-direct]", "priority": "HIGH"}
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": ["/app/backend/tests/test_iteration12_preview_links.py", "/app/test_reports/pytest/iteration12.xml"],
+  "action_items": [
+    "Sync CopySettings state with server settings after load (useEffect fetch of /api/settings), so a stale default header doesn't overwrite the user's custom one",
+    "html.unescape scraped titles in deal_info / ph data (&amp shows in copied text and og:title)",
+    "Improve image lookup for Flipkart links that have no pid, so preview pages have og:image"
+  ],
+  "critical_code_review_comments": [
+    "preview_html: og:image uses third-party image URLs (images.price.tools, m.media-amazon). That works for Telegram, but consider routing through /api/image-proxy as a fallback for hosts that block hotlinking",
+    "db.links grows with every bulk convert (a new code each time, even for the same URL) and has no index on 'code'. Add an index and/or dedupe by url",
+    "/api/go/* pages are served from the preview domain with x-robots-tag noindex. Fine for previews, but check that production uses the deployed domain"
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration12_preview_links.py"],
+  "success_rate": {"backend": "100%", "frontend": "90% (all copy/share flows pass; settings panel shows stale state on load)"},
+  "seed_data_creation": "Bulk converts created several db.links docs (share codes). Settings restored to copy_header='🪙 100% SuperCoin Deals 🪙', copy_link_style='preview'.",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Sankmo is connected: real Flipkart URLs convert to fkrt.site in about 5-10s. A good test URL with image/price: https://www.flipkart.com/flipkart/p/itm69cc6d7c2842e?pid=WATG4NP8QGQNZGGH. amazon_tag is '' so Amazon shows 'Add your Amazon tag first' but still gets a share_code. Grant clipboard-read/write in playwright and read with navigator.clipboard.readText(). To retest the CopySettings bug: PUT a custom header via the API, load /admin directly and check the copy-header-input value. Restore defaults after."
+}

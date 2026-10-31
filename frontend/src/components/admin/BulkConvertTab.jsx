@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Copy, Share2, ImageDown } from "lucide-react";
 import { api, errMsg, inr } from "@/lib/api";
@@ -15,6 +15,9 @@ const toDeal = (it) => ({ title: it.title, price: it.price, mrp: it.mrp, store: 
 const CopySettings = () => {
   const [header, setHeader] = useState(prefs.header);
   const [style, setStyle] = useState(prefs.style);
+  useEffect(() => {
+    api.get("/settings").then(({ data }) => { setPrefs(data); setHeader(data.copy_header ?? ""); setStyle(data.copy_link_style || "preview"); }).catch(() => {});
+  }, []);
   const save = async (extra = {}) => {
     try {
       const { data } = await api.put("/settings", { copy_header: header, copy_link_style: style, ...extra });
@@ -40,7 +43,21 @@ const CopySettings = () => {
   );
 };
 
-const ResultCard = ({ it, i }) => {
+const AddPicture = ({ it, i, onImage }) => {
+  const [url, setUrl] = useState("");
+  const save = async () => {
+    try { await api.put(`/go/${it.share_code}`, { image: url.trim() }); onImage(url.trim()); toast.success("Picture added — copy again to share it"); }
+    catch (e) { toast.error(errMsg(e)); }
+  };
+  return (
+    <div className="flex gap-2 pt-1">
+      <Input data-testid={`bulk-image-input-${i}`} value={url} onChange={(e) => setUrl(e.target.value)} placeholder="No picture found — paste a picture link" className={`${fieldCls} h-8 text-xs`} />
+      <button data-testid={`bulk-image-save-${i}`} className={btn} onClick={save} disabled={!url.trim()}>Add picture</button>
+    </div>
+  );
+};
+
+const ResultCard = ({ it, i, onImage }) => {
   const deal = toDeal(it);
   return (
     <div data-testid={`bulk-result-${i}`} className="flex gap-4 rounded-xl border border-slate-200 bg-white p-3">
@@ -65,6 +82,7 @@ const ResultCard = ({ it, i }) => {
           <button data-testid={`bulk-share-${i}`} className={btn} onClick={() => shareDeal(deal)}><Share2 className="h-3.5 w-3.5" /> Share</button>
           {it.image && <button data-testid={`bulk-share-image-${i}`} className={btn} onClick={() => shareWithImage(deal)}><ImageDown className="h-3.5 w-3.5" /> Share with image</button>}
         </div>
+        {!it.image && it.share_code && <AddPicture it={it} i={i} onImage={onImage} />}
       </div>
     </div>
   );
@@ -101,7 +119,8 @@ export const BulkConvertTab = () => {
             <Button data-testid="bulk-copy-message-button" className={ghostBtn} onClick={() => copyText(res.message, "Full message with your links copied")}><Copy className="mr-1 h-4 w-4" /> Copy original message</Button>
           </div>}>
           <pre data-testid="bulk-message" className="mb-4 max-h-48 overflow-auto whitespace-pre-wrap break-all rounded-xl bg-[#F5F2EA] p-3 font-mono text-xs">{res.message}</pre>
-          <div className="space-y-3">{res.items.map((it, i) => <ResultCard key={it.original} it={it} i={i} />)}</div>
+          <div className="space-y-3">{res.items.map((it, i) => <ResultCard key={it.original} it={it} i={i}
+            onImage={(image) => setRes({ ...res, items: res.items.map((x, j) => (j === i ? { ...x, image } : x)) })} />)}</div>
         </Panel>
       )}
       <CopySettings />
