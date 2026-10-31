@@ -1,18 +1,29 @@
 import { toast } from "sonner";
-import { inr } from "@/lib/api";
+import { api, inr } from "@/lib/api";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
-export const dealText = ({ title, price, mrp, discount, store, link }) => {
+export const prefs = { header: "🪙 100% SuperCoin Deals 🪙", style: "preview" };
+export const setPrefs = (s) => {
+  if (s.copy_header !== undefined) prefs.header = s.copy_header;
+  if (s.copy_link_style) prefs.style = s.copy_link_style;
+};
+export const loadPrefs = () => api.get("/settings").then((r) => setPrefs(r.data)).catch(() => {});
+export const previewUrl = (path) => `${API}/go/${path}`;
+
+export const dealText = ({ title, price, mrp, discount, store, link, preview }) => {
   const off = price && mrp && mrp > price ? Math.round((1 - price / mrp) * 100) : discount ? Math.round(discount) : null;
   const lines = [`🔥 ${title || "Hot deal"}`, ""];
   if (price) lines.push(`✅ Deal Price: ${inr(price)}`);
   if (mrp && (!price || mrp > price)) lines.push(`❌ MRP: ${inr(mrp)}`);
   if (off) lines.push(`💥 ${off}% OFF`);
   if (store && store !== "Other") lines.push(`🛒 Store: ${store}`);
-  lines.push("", `👉 Buy now: ${link}`);
+  lines.push("", `👉 Buy now: ${preview && prefs.style === "preview" ? preview : link}`);
   return lines.join("\n");
 };
+
+export const allDealsText = (deals) =>
+  [prefs.header?.trim(), ...deals.map(dealText).map((t, i) => (i ? `➖➖➖➖➖\n\n${t}` : t))].filter(Boolean).join("\n\n");
 
 const imageFile = async (image) => {
   if (!image) return null;

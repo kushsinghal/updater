@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import { api, CATS, inr, timeAgo } from "@/lib/api";
 import { PriceHistoryDialog } from "@/components/PriceHistoryDialog";
 import { OriginalPostDialog } from "@/components/OriginalPostDialog";
-import { copyDeal, shareDeal } from "@/lib/share";
+import { copyDeal, shareDeal, previewUrl } from "@/lib/share";
 
 const Thumb = ({ deal }) =>
   deal.image ? (
@@ -21,7 +21,7 @@ export const DealCard = ({ deal, index = 0, onChange }) => {
   const [starred, setStarred] = useState(!!deal.featured);
   const [chart, setChart] = useState(false);
   const link = deal.affiliate_url || deal.url;
-  const shareData = { title: deal.title, price: deal.price, mrp: deal.mrp, discount: deal.discount, store: deal.store, image: deal.image, link };
+  const shareData = { title: deal.title, price: deal.price, mrp: deal.mrp, discount: deal.discount, store: deal.store, image: deal.image, link, preview: previewUrl(`d/${deal.id}`) };
   const toggleStar = async () => {
     const next = !starred;
     setStarred(next);

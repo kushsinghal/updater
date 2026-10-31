@@ -6,6 +6,8 @@ import os
 import re
 import asyncio
 import hmac
+import json
+import html as html_lib
 import logging
 import uuid
 import httpx
@@ -37,6 +39,7 @@ DEFAULT_SETTINGS = {
     "convert_mode": "sankmo_api", "sankmo_bot": "sankmo_bot", "tg_api_id": "", "tg_api_hash": "", "tg_phone": "",
     "tg_session": "", "tg_user": "", "check_interval_minutes": 15, "check_interval_seconds": 60, "post_style": "simple", "max_posts_per_update": 20,
     "website_max_age_hours": 24, "telegram_max_age_minutes": 60, "last_run_at": None, "amazon_tag": "",
+    "copy_header": "🪙 100% SuperCoin Deals 🪙", "copy_link_style": "preview",
 }
 SEED_SOURCES = ["dealsxpert", "TrickXpert", "lootdealsofficial", "desidime", "coolztricks", "omgdeals", "flipshope",
                 "cooloffersofficial", "dealsheaven", "GiftCardLoot", "TricksByStg", "freekamaal", "dealzarena"]
@@ -89,6 +92,8 @@ class SettingsIn(BaseModel):
     telegram_max_age_minutes: Optional[float] = None
     max_posts_per_update: Optional[int] = None
     amazon_tag: Optional[str] = None
+    copy_header: Optional[str] = None
+    copy_link_style: Optional[Literal["preview", "direct"]] = None
 
 
 class BulkIn(BaseModel):
@@ -716,12 +721,44 @@ async def convert_bulk(body: BulkIn):
         if not err and out == clean:
             err = "Add your Amazon tag first" if store == "Amazon" else "Sankmo not set up or returned no link"
         swaps.append((orig, out))
+        code = uuid.uuid4().hex[:8]
+        await db.links.insert_one({"code": code, "url": out, "store": store, **info, "created_at": now()})
         items.append({"original": orig, "cleaned": clean, "converted": out, "changed": out != clean, "error": err,
-                      "store": store, **info})
+                      "store": store, "share_code": code, **info})
     lookup = dict(swaps)
     pattern = "|".join(re.escape(o) for o, _ in sorted(swaps, key=lambda x: -len(x[0])))
     message = re.sub(pattern, lambda m: lookup[m.group(0)], body.text)
     return {"items": items, "message": message.strip(), "total_found": len(found), "skipped": found[BULK_MAX:]}
+
+
+def preview_html(url, title, image, price=None, mrp=None, store=None):
+    h = html_lib.escape
+    desc = " | ".join(filter(None, [f"Deal Price ₹{price:,.0f}" if price else "", f"MRP ₹{mrp:,.0f}" if mrp else "", store]))
+    img = image or ""
+    og_img = f'<meta property="og:image" content="{h(img)}"><meta name="twitter:card" content="summary_large_image">' if img else ""
+    t = h(title or "Hot deal")
+    return Response(media_type="text/html", content=f"""<!doctype html><html><head><meta charset="utf-8">
+<title>{t}</title><meta property="og:type" content="website"><meta property="og:title" content="{t}">
+<meta property="og:description" content="{h(desc)}"><meta property="og:site_name" content="{h(store or 'Deal')}">{og_img}
+<meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="font-family:sans-serif;text-align:center;padding:40px"><p>Opening deal…</p><a href="{h(url)}">Tap here if not redirected</a>
+<script>location.replace({json.dumps(url)})</script></body></html>""")
+
+
+@api.get("/go/d/{deal_id}")
+async def go_deal(deal_id: str, request: Request):
+    d = await db.deals.find_one({"id": deal_id}, NO_ID)
+    if not d:
+        raise HTTPException(404, "Deal not found")
+    return preview_html(d.get("affiliate_url") or d["url"], d.get("title"), d.get("image"), d.get("price"), d.get("mrp"), d.get("store"))
+
+
+@api.get("/go/{code}")
+async def go_link(code: str, request: Request):
+    d = await db.links.find_one({"code": code}, NO_ID)
+    if not d:
+        raise HTTPException(404, "Link not found")
+    return preview_html(d["url"], d.get("title"), d.get("image"), d.get("price"), d.get("mrp"), d.get("store"))
 
 
 @api.get("/image-proxy")

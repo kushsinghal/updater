@@ -2,15 +2,46 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { Copy, Share2, ImageDown } from "lucide-react";
 import { api, errMsg, inr } from "@/lib/api";
-import { copyText, copyDeal, shareDeal, shareWithImage, dealText } from "@/lib/share";
+import { copyText, copyDeal, shareDeal, shareWithImage, allDealsText, previewUrl, prefs, setPrefs } from "@/lib/share";
 import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Panel, primaryBtn, ghostBtn } from "./Panel";
+import { Panel, primaryBtn, ghostBtn, fieldCls } from "./Panel";
 
 const btn = "flex items-center gap-1.5 rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 transition-colors hover:bg-slate-200";
+const toDeal = (it) => ({ title: it.title, price: it.price, mrp: it.mrp, store: it.store, image: it.image, link: it.converted,
+  preview: it.share_code ? previewUrl(it.share_code) : null });
+
+const CopySettings = () => {
+  const [header, setHeader] = useState(prefs.header);
+  const [style, setStyle] = useState(prefs.style);
+  const save = async (extra = {}) => {
+    try {
+      const { data } = await api.put("/settings", { copy_header: header, copy_link_style: style, ...extra });
+      setPrefs(data);
+      setStyle(data.copy_link_style);
+      toast.success("Copy settings saved");
+    } catch (e) { toast.error(errMsg(e)); }
+  };
+  const opt = (v, label) => (
+    <button data-testid={`copy-style-${v}`} onClick={() => { setStyle(v); save({ copy_link_style: v }); }}
+      className={`rounded-full border px-4 py-1.5 text-xs font-semibold transition-colors ${style === v ? "border-slate-900 bg-slate-900 text-white" : "border-slate-300 text-slate-700"}`}>{label}</button>
+  );
+  return (
+    <Panel testid="copy-settings-panel" title="Copy & share settings" desc="Top line is added when you copy all deals (1, 2 or 5). Picture links show the product photo in Telegram/WhatsApp and open your affiliate link.">
+      <div className="space-y-3">
+        <div className="flex gap-2">
+          <Input data-testid="copy-header-input" value={header} onChange={(e) => setHeader(e.target.value)} placeholder="Top line (empty = none)" className={fieldCls} />
+          <Button data-testid="copy-header-save-button" className={primaryBtn} onClick={() => save()}>Save</Button>
+        </div>
+        <div className="flex flex-wrap gap-2">{opt("preview", "Link with picture preview (recommended)")}{opt("direct", "Direct affiliate link")}</div>
+      </div>
+    </Panel>
+  );
+};
 
 const ResultCard = ({ it, i }) => {
-  const deal = { title: it.title, price: it.price, mrp: it.mrp, store: it.store, image: it.image, link: it.converted };
+  const deal = toDeal(it);
   return (
     <div data-testid={`bulk-result-${i}`} className="flex gap-4 rounded-xl border border-slate-200 bg-white p-3">
       <div className="h-24 w-24 shrink-0 overflow-hidden rounded-lg bg-slate-100">
@@ -66,13 +97,14 @@ export const BulkConvertTab = () => {
       {res && (
         <Panel testid="bulk-results-panel" title={`${res.items.filter((x) => x.changed).length} of ${res.items.length} links converted`}
           action={<div className="flex flex-wrap gap-2">
-            <Button data-testid="bulk-copy-all-details-button" className={primaryBtn} onClick={() => copyText(res.items.map((it) => dealText({ title: it.title, price: it.price, mrp: it.mrp, store: it.store, link: it.converted })).join("\n\n➖➖➖➖➖\n\n"), "All deals with details copied")}><Copy className="mr-1 h-4 w-4" /> Copy all deals with details</Button>
+            <Button data-testid="bulk-copy-all-details-button" className={primaryBtn} onClick={() => copyText(allDealsText(res.items.map(toDeal)), "All deals with details copied")}><Copy className="mr-1 h-4 w-4" /> Copy all deals with details</Button>
             <Button data-testid="bulk-copy-message-button" className={ghostBtn} onClick={() => copyText(res.message, "Full message with your links copied")}><Copy className="mr-1 h-4 w-4" /> Copy original message</Button>
           </div>}>
           <pre data-testid="bulk-message" className="mb-4 max-h-48 overflow-auto whitespace-pre-wrap break-all rounded-xl bg-[#F5F2EA] p-3 font-mono text-xs">{res.message}</pre>
           <div className="space-y-3">{res.items.map((it, i) => <ResultCard key={it.original} it={it} i={i} />)}</div>
         </Panel>
       )}
+      <CopySettings />
     </div>
   );
 };
