@@ -91,3 +91,8 @@ Website that finds big deals (Flipkart 100% SuperCoin, gift card discounts, heav
 
 ## Iteration 12 (Jun 2026)
 - Copy now copies text only (title, deal price, MRP, % off, store, your link) so it pastes everywhere; Share sends text to any app; "Share with image" is optional in bulk results. Bulk: "Copy all deals with details" button.
+
+## Iteration 13 (Jun 2026)
+- Picture preview links: /api/go/{code} (bulk) and /api/go/d/{deal_id} (deal cards) serve og:title/description/image then redirect to the affiliate link, so Telegram/WhatsApp show the product photo. Copy setting: preview (default) or direct link.
+- Editable copy header (settings.copy_header, default "🪙 100% SuperCoin Deals 🪙") added to "Copy all deals" for any count.
+- Missing pictures: reuse from known deals, else user pastes a picture link (PUT /api/go/{code}).

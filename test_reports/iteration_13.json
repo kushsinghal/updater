@@ -1,0 +1,31 @@
+{
+  "summary": "Retested the iteration_12 fixes and the new picture features. Backend: 10/10 new pytest pass, and the 11/11 iteration12 regression tests pass. deal_info reuses image/title from db.deals with the same product_key (the NAUTICA pid link got its image from the db). Titles have no &amp;. PUT /api/go/{code} saves the image, and GET then shows it as og:image. Unknown code gives 404, ftp:/javascript: gives 400, and an empty body gives 422. /go/{code} and /go/d/{id} pages work. Frontend: after PUT settings 'X CUSTOM'/direct and a reload, /admin shows 'X CUSTOM' with direct highlighted. Clicking preview kept the header 'X CUSTOM' (no overwrite). The header was then restored through the UI. Bulk convert: the Flipkart no-pid card shows bulk-image-input-0/save-0 (save disabled when empty). A bad link shows the error toast. A valid URL shows the success toast, the card shows the picture, the input disappears and 'Share with image' appears. The /api/go page now has og:image. Copy all puts the default header on top, with /api/go links.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "deal_info", "issue": "The db reuse matches on product_key. A Flipkart URL with a pid gives key 'flipkart:PID', but the same product pasted without the pid gives 'flipkart:itmXXX', so a known deal is missed in that case. Consider also matching the itm id."},
+      {"endpoint": "PUT /api/go/{code}", "issue": "startswith('http') is checked before strip(), so ' https://...' with a leading space is rejected. Also 'httpfoo' passes. Prefer stripping first and checking for 'http://' or 'https://'."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": ["/app/backend/tests/test_iteration13_link_image.py", "/app/test_reports/pytest/iteration13.xml"],
+  "action_items": [
+    "Optional: match db deals by the Flipkart itm id as well as the pid",
+    "Optional: strip the image URL before validating it in PUT /api/go/{code}",
+    "FYI: amazon_tag is currently empty in settings, so Amazon links show 'Add your Amazon tag first' (an environment state, not a code bug; the tests did not touch it)"
+  ],
+  "critical_code_review_comments": [
+    "db.links still has no index on 'code' and grows with every bulk convert",
+    "The db-reuse price/mrp may be stale (from an old deal) and takes priority over the fresher pricehistory price. Consider preferring the ph price and reusing only image/title from the db"
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration13_link_image.py"],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "seed_data_creation": "Bulk converts created several db.links docs. Settings were restored to the default header/preview.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Known db deal URL: https://www.flipkart.com/x/p/itma5c981881bf9d?pid=WATH2H2KJVNFHJY4 (NAUTICA). No-pid Flipkart URL (no image): /tommy-hilfiger-analog-watch/p/itm2f049aec7e6b6. pytest.ini uses xdist."
+}
