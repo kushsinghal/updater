@@ -663,9 +663,10 @@ async def write_settings(body: SettingsIn):
 
 
 async def retag_amazon(tag):
-    async for d in db.deals.find({"store": "Amazon"}, {"_id": 0, "id": 1, "clean_url": 1}):
-        aff = engine.amazon_affiliate(d["clean_url"], tag)
-        await db.deals.update_one({"id": d["id"]}, {"$set": {"affiliate_url": aff, "converted": aff != d["clean_url"]}})
+    async for d in db.deals.find({"store": "Amazon"}, {"_id": 0, "id": 1, "clean_url": 1, "url": 1}):
+        clean = d.get("clean_url") or d["url"]
+        aff = engine.amazon_affiliate(clean, tag)
+        await db.deals.update_one({"id": d["id"]}, {"$set": {"affiliate_url": aff, "converted": aff != clean}})
 
 
 @api.post("/convert")
@@ -702,7 +703,7 @@ async def convert_bulk(body: BulkIn):
     settings = await get_settings()
     cleaned = await asyncio.gather(*[engine.clean_link(u) for u in links])
     infos = await asyncio.gather(*[deal_info(c) for c in cleaned])
-    items, message = [], body.text
+    items, swaps = [], []
     for orig, clean, info in zip(links, cleaned, infos):
         err = None
         try:
@@ -714,18 +715,24 @@ async def convert_bulk(body: BulkIn):
         store = engine.detect_store(clean)
         if not err and out == clean:
             err = "Add your Amazon tag first" if store == "Amazon" else "Sankmo not set up or returned no link"
-        message = message.replace(orig, out)
+        swaps.append((orig, out))
         items.append({"original": orig, "cleaned": clean, "converted": out, "changed": out != clean, "error": err,
                       "store": store, **info})
+    lookup = dict(swaps)
+    pattern = "|".join(re.escape(o) for o, _ in sorted(swaps, key=lambda x: -len(x[0])))
+    message = re.sub(pattern, lambda m: lookup[m.group(0)], body.text)
     return {"items": items, "message": message.strip(), "total_found": len(found), "skipped": found[BULK_MAX:]}
 
 
 @api.get("/image-proxy")
 async def image_proxy(url: str):
-    if not url.startswith("http"):
+    if not url.startswith("http") or re.search(r'//(localhost|127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|0\.|169\.254\.|\[)', url):
         raise HTTPException(400, "Bad image link")
-    async with httpx.AsyncClient(timeout=15, headers=engine.UA, follow_redirects=True) as c:
-        r = await c.get(url)
+    try:
+        async with httpx.AsyncClient(timeout=15, headers=engine.UA, follow_redirects=True) as c:
+            r = await c.get(url)
+    except httpx.HTTPError:
+        raise HTTPException(400, "Could not load image")
     ctype = r.headers.get("content-type", "")
     if r.status_code != 200 or not ctype.startswith("image/") or len(r.content) > 8_000_000:
         raise HTTPException(400, "Could not load image")

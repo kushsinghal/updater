@@ -1,0 +1,39 @@
+{
+  "summary": "Tested Amazon tag conversion (skips Sankmo), cleaning of other people's tracking links (Amazon/Flipkart/wrapped dl= links), bulk convert (max 5, skipped list, message rewrite, title/image/price via pricehistory), image proxy, retag of existing Amazon deals on tag save, Admin Convert Links + Affiliate Setup tabs, and Deal card copy/share buttons. All requested features work. 12/13 backend tests pass; the one failure is a minor 500 from image-proxy for an unreachable host. Frontend flows all worked with no page errors. amazon_tag was set back to '' at the end, and the test deal was deleted.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "GET /api/image-proxy", "issue": "If the host can't be reached or times out, the call returns 500 instead of 400. httpx.ConnectError/TimeoutException is not caught (server.py image_proxy). Wrap the request in try/except and raise HTTPException(400)."},
+      {"endpoint": "GET /api/image-proxy", "issue": "SSRF risk: it fetches any http(s) URL, including internal/private hosts. Consider blocking private IP ranges or localhost."},
+      {"endpoint": "POST /api/convert/bulk", "issue": "Amazon items often come back with title/image/price null (e.g. B09B8X9RGM): pricehistory has no data and Amazon blocks og:image. Flipkart and some Amazon ASINs do get filled in. Acceptable, but the card then has no image to share."},
+      {"endpoint": "enrich() (POST /api/deals)", "issue": "Pre-existing: when the manual price is under 30% of the pricehistory reference, the price is replaced but discount is not recalculated. Example: price 499 / MRP 59900 is shown as ₹49,900 with '99% OFF'."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Deals page (/) cards at 1920px, 4-column grid", "issues": ["The action row (Grab Deal + chart + copy + share + Post) is too crowded now that the share button was added. 'Grab Deal' wraps onto 2 lines, and the 'Post' button overflows or gets clipped at the card's right edge (seen on the 4th card). Use icon-only Post, a smaller gap, or move the secondary icons to a second row."]},
+      {"screen": "Admin Convert Links result card", "issues": ["Image thumbnail is lazy/slow, so it shows briefly as an empty grey box. Minor."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_iteration11_amazon_bulk_share.py", "/app/test_reports/pytest/pytest_results_iter11.xml"],
+  "action_items": [
+    "Catch httpx errors in /api/image-proxy and return 400 (currently 500 for unreachable hosts)",
+    "Fix the crowded or overflowing action-button row on DealCard in the 4-column desktop grid",
+    "Optional: block private/internal hosts in image-proxy (SSRF)",
+    "Optional: recalculate discount in enrich() when the price is replaced"
+  ],
+  "critical_code_review_comments": [
+    "strip_affiliate rewrites every Amazon domain (amazon.com too) to amazon.in/dp/ASIN. This is fine for an Indian audience but changes the store for amazon.com links.",
+    "convert_bulk uses message.replace(orig, out). If one link is a prefix of another link in the same message, the replacement could corrupt it. Rare, but a regex replace with boundaries would be safer.",
+    "retag_amazon accesses d['clean_url'] directly. A legacy Amazon deal without clean_url would raise KeyError and break PUT /settings. Use d.get('clean_url') or d['url'].",
+    "server.py is about 896 lines; consider splitting it into routers."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration11_amazon_bulk_share.py"],
+  "success_rate": {"backend": "92% (12/13)", "frontend": "100%"},
+  "seed_data_creation": "Created TEST_ deals temporarily and deleted them. amazon_tag reset to ''.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Sankmo/Telegram are not configured in preview, so non-Amazon links come back cleaned with an error message (expected). Run the regression suite: pytest backend/tests/test_iteration11_amazon_bulk_share.py (it resets amazon_tag to '' on teardown). In headless Chromium with clipboard permissions, copy/share fall back to ClipboardItem and show the toast 'Image + deal text copied'."
+}

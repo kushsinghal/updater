@@ -80,3 +80,11 @@ Website that finds big deals (Flipkart 100% SuperCoin, gift card discounts, heav
 - P1: Price history / lowest-ever section, live price comparison across stores
 - P1: admin password; X/WhatsApp (skipped: paid/no public access)
 - P2: better price/title parsing, custom message templates, deal expiry
+
+## Iteration 11 (Jun 2026)
+- Amazon links skip Sankmo (Sankmo doesn't support Amazon): cleaned to amazon.in/dp/ASIN, then user's Amazon Associates tag added (settings.amazon_tag, PLACEHOLDER empty until user sets it in Affiliate Setup). Saving tag retags all Amazon deals; startup also retags.
+- Bulk convert: POST /api/convert/bulk (max 5 links per run, rest returned in skipped), cleans others' tracking first, then converts; returns title/image/price via pricehistory + rewritten full message. Admin tab "Convert Links" (default) with copy link / copy with image / share per link and "load next 5".
+- Share with image: GET /api/image-proxy; deal cards have Copy (image + text + link) and Share (native share sheet with image file, fallback copy).
+## Backlog
+- P1: Amazon images often missing (Amazon blocks scraping) — consider Amazon PA-API
+- P2: publish bulk-converted deals to website/Telegram in one tap

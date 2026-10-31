@@ -15,7 +15,7 @@ const Thumb = ({ deal }) =>
     </div>
   );
 
-const iconBtn = "grid place-items-center rounded-xl border border-slate-300 px-3 transition-colors hover:bg-slate-200";
+const iconBtn = "grid shrink-0 place-items-center rounded-xl border border-slate-300 px-2.5 transition-colors hover:bg-slate-200";
 
 export const DealCard = ({ deal, index = 0, onChange }) => {
   const [starred, setStarred] = useState(!!deal.featured);
@@ -73,10 +73,10 @@ export const DealCard = ({ deal, index = 0, onChange }) => {
         <p data-testid={`deal-posted-${deal.id}`} className="font-mono text-[11px] text-slate-500">
           {deal.source} · posted {timeAgo(deal.posted_at || deal.created_at)}
         </p>
-        <div className="mt-auto flex gap-2 pt-1">
+        <div className="mt-auto flex gap-1.5 pt-1">
           <a href={link} target="_blank" rel="noopener noreferrer" data-testid={`grab-deal-button-${deal.id}`}
-            className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-slate-900 py-2.5 text-sm font-bold text-white transition-colors hover:bg-[#FF5A1F]">
-            Grab Deal <ExternalLink className="h-4 w-4" />
+            className="flex min-w-0 flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl bg-slate-900 py-2.5 text-sm font-bold text-white transition-colors hover:bg-[#FF5A1F]">
+            Grab <ExternalLink className="h-4 w-4" />
           </a>
           <button onClick={() => setChart(true)} data-testid={`price-history-button-${deal.id}`} aria-label="Price history" className={`${iconBtn} text-emerald-700`}>
             <LineChart className="h-4 w-4" />
@@ -89,8 +89,8 @@ export const DealCard = ({ deal, index = 0, onChange }) => {
           </button>
           {deal.source_post_url ? (
             <button onClick={() => setPost(true)} data-testid={`original-post-button-${deal.id}`} aria-label="Original post" title="See the original post"
-              className={`${iconBtn} gap-1 text-[11px] font-semibold text-[#229ED9]`}>
-              <Link2 className="h-4 w-4" /> Post
+              className={`${iconBtn} text-[#229ED9]`}>
+              <Link2 className="h-4 w-4" />
             </button>
           ) : (
             <span className={`${iconBtn} cursor-not-allowed text-slate-300`} title="Added by hand — no original post"><Link2 className="h-4 w-4" /></span>
