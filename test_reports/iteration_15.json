@@ -1,0 +1,32 @@
+{
+  "summary": "Retested the iteration_14 CRITICAL bug: it is FIXED. With base=REACT_APP_BACKEND_URL, POST /api/convert/bulk on a Flipkart link with no pid now returns changed=true, a fkrt.site link, error=null AND image <base>/api/img/<id>. That URL returns a valid JPEG, and the /api/go og:image matches it. Passed 3 of 3 runs (iPhone 15 x2, Tommy Hilfiger itm2f049aec7e6b6; deal_info reuses pictures only from db.deals/ph_cache, so each run did a fresh Telegram lookup). Invalid base values (http://, javascript:, a path, empty) skip the picture lookup with no crash, and the link still converts. UI /admin Convert Links with 4 links: 3 of 4 converted (Amazon shows 'Add your Amazon tag first', as expected), all 4 cards show pictures, no Add-picture box, the message has replacements, and Copy all = header + 4 /api/go blocks.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/convert/bulk", "issue": "The timeout error text 'Sankmo bot timed out' was checked by code review only. I could not trigger a real timeout without disturbing the Telegram session."},
+      {"endpoint": "POST /api/convert/bulk", "issue": "base is checked only for format (https://host), not against an allowed host. Any https host the client sends is still stored as the picture URL. Low risk."},
+      {"endpoint": "fill_pictures", "issue": "The title from the Telegram preview can be the full SEO title, e.g. 'TOMMY HILFIGER Automatic Analog Watch - For Men - Buy TOMMY HILFIGER ... Online at Best Prices in India | Flipkart.com'. The filter regex does not cut the ' - Buy ... | Flipkart.com' part."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [{"screen": "Convert Links card/Copy all", "issues": ["Long SEO-style Flipkart titles from previews make the copied deal text messy"]}]
+  },
+  "test_report_links": ["/app/backend/tests/test_iteration15_bulk_preview_after_convert.py", "/app/test_reports/pytest/iteration15.xml"],
+  "action_items": [
+    "Optional: clean up preview titles (cut text from ' - Buy ' onward and drop '| Flipkart.com')",
+    "Optional: check base against the allowed host"
+  ],
+  "critical_code_review_comments": [
+    "convert_bulk now runs bot conversions one after another, then web_previews; both are under tgconv._lock, so there is no concurrent client. This is correct.",
+    "db.images still grows on every bulk convert (no dedup or TTL)",
+    "The progress label for 4 links goes 0/4 -> 3/4 -> done. The 3/4 step is very short when the last chunk is Amazon-only. Not a bug."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration15_bulk_preview_after_convert.py"],
+  "success_rate": {"backend": "100% (7/7)", "frontend": "100%"},
+  "seed_data_creation": "Bulk converts added db.links and db.images docs. Settings were untouched. Telegram was not logged out.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Run test_iteration15 for regression (about 45s). amazon_tag is still empty. Flipkart links without a picture in db.deals: iPhone 15 itm6ac6485515ae4, Tommy itm2f049aec7e6b6."
+}

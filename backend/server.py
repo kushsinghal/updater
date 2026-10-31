@@ -788,7 +788,7 @@ async def fill_pictures(items, previews, base):
             pid = uuid.uuid4().hex
             await db.images.insert_one({"id": pid, "data": p["photo"], "ctype": "image/jpeg", "created_at": now()})
             saved[it["cleaned"]] = f"{base}/api/img/{pid}"
-        ptitle = html_lib.unescape(p.get("title") or "")
+        ptitle = re.split(r"\s+-\s+Buy\s|\s+\|\s+Flipkart", html_lib.unescape(p.get("title") or ""))[0].strip()
         if re.search(r"Online Shopping|Best Price in India - All Categories|^Flipkart", ptitle):
             ptitle = ""
         upd = {"image": saved.get(it["cleaned"]), "title": it["title"] or ptitle or None}

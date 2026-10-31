@@ -96,3 +96,8 @@ Website that finds big deals (Flipkart 100% SuperCoin, gift card discounts, heav
 - Picture preview links: /api/go/{code} (bulk) and /api/go/d/{deal_id} (deal cards) serve og:title/description/image then redirect to the affiliate link, so Telegram/WhatsApp show the product photo. Copy setting: preview (default) or direct link.
 - Editable copy header (settings.copy_header, default "🪙 100% SuperCoin Deals 🪙") added to "Copy all deals" for any count.
 - Missing pictures: reuse from known deals, else user pastes a picture link (PUT /api/go/{code}).
+
+## Iteration 14 (Jun 2026)
+- Auto Flipkart pictures in bulk convert: Telegram link preview (GetWebPagePreview via the connected Telegram account, after conversions, under tgconv lock) → photo stored in db.images, served at /api/img/{id}; titles cleaned.
+- Bulk convert up to 10 links (frontend sends batches of 3 with progress), "Load next" for more.
+- Alternatives to Sankmo researched: Cuelinks API, INRDeals, EarnKaro, ExtraPe, Affiliaters, Amazon PA-API.
