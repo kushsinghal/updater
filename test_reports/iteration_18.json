@@ -1,0 +1,33 @@
+{
+  "summary": "Tested the dedupe fix, multi-link split posts, client-base, the split_multi rule and the poller. All 10 pytest tests pass. split_post unit tests: it caps at 10 links (split_index 1..10, ext_id #0..#9). A post with 1 store link (t.me and other links ignored) is not split. split_multi=False means no split. A missing setting defaults to split. Each part gets the price written next to its own link. ingest dedupe, tested with real ingest() on TEST_ sources (cleaned up): the same source with the same title and a new link is accepted. A different source with the same title within 6h is blocked. The same clean_url is blocked. API: the @brogity 04:55 post appears as 5 separate deals (split_index 1..5, split_total 5). Each has its own product title (FOSSIL Laney, Titan Workwear Pink/Red, two Titan Automatic). Each has its own image, a price (12993/8443/7695/7995/7997), a fkrt.site affiliate_url, the supercoin_100 category, and post_title equal to the original post title. client-base: an invalid or http base gives ok:false. A valid https base gives ok:true and stores public_base. /api/stats last_scan_at was 9s old and changed within 100s. UI: searching 'Titan Workwear' on the Deals page shows the split deals as separate cards with pictures that load. Copy puts the details and the /api/go link on the clipboard and shows a toast. Share in headless mode falls back to copy with the same toast. Rules tab: turning off rule-split-multi-switch and pressing rules-save-button saves false to the API. The switch stays off after a reload. It was then turned back on and saved, so split_multi is true again.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "ingest (transition)", "issue": "The @brogity post brogity/30583 (03:55) has the old whole-post deal from before the split feature AND split part #9 (Hilfiger). This gives a partial duplicate, but only for posts ingested before the feature. Its other parts were blocked by clean_url/product_key dedupe."},
+      {"endpoint": "fill_split_info", "issue": "When no product title is found, the title falls back to 'post title (i/n)' (e.g. dealsheaven Ajio 'Upto 90% Off On Buda Jeans Co Clothing. (2/4)'). Those parts reuse the post image, so the cards look the same."},
+      {"endpoint": "POST /api/client-base", "issue": "Not authenticated. Any client can set public_base to any https host, and split image URLs are built from it. This is low risk because the app has no auth, but consider allow-listing the base."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": ["/app/backend/tests/test_iteration18_split_dedupe.py", "/app/test_reports/pytest/iteration18.xml"],
+  "action_items": [
+    "Optional: allow-list or validate the public_base host in /api/client-base (e.g. must match the request Host)",
+    "Optional: when a split part has no product title or image, consider skipping it or showing the link text instead of '(i/n)'"
+  ],
+  "critical_code_review_comments": [
+    "Split parts skip the title dedupe completely (`if not deal.get('split')`). The same product posted by two channels with different short links is only deduped if clean_url/product_key match. This is usually fine for Flipkart pid links.",
+    "fill_split_info runs one after another per part (deal_info plus a possible web preview) inside the fetch lock. A post with 10 links can add 30-60s to a scan.",
+    "split_post uses link_context for prices. For a link that appears more than once in the text, text.find gets the first place it appears.",
+    "server.py is 1128 lines. Split it into modules (ingest/split, settings, deals routes)."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration18_split_dedupe.py"],
+  "success_rate": {"backend": "100% (10/10)", "frontend": "100%"},
+  "seed_data_creation": "None kept. The TEST_ ingest deals and seen keys were deleted. split_multi was restored to true. public_base was set again to REACT_APP_BACKEND_URL (unchanged). Telegram is still connected.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run: cd /app/backend && pytest tests/test_iteration18_split_dedupe.py -n 0 -s (about 65s; the poller test waits up to 100s). The split @brogity post is brogity/30584, posted 2026-10-31T04:55:58. pytest.ini adds xdist args, so use -n 0. Do not log out of Telegram."
+}

@@ -109,3 +109,7 @@ Website that finds big deals (Flipkart 100% SuperCoin, gift card discounts, heav
 - Sankmo store allow-list (settings.sankmo_stores, chips in Affiliate Setup); other links posted clean. Asset links (.js/.css/raw/upload) ignored.
 - Original post dialog: "Convert all links to mine" → Convert Links prefilled; "Load next" keeps the full message with earlier converted links.
 - WEBHOOK_CRON_SECRET added to backend .env.
+
+## Iteration 16 (Jun 2026)
+- Dedupe fix: same-title block only across different sources within 6h (was any source within 2 days → hid reposts with new links).
+- Split multi-link posts (settings.split_multi, Rules switch): one deal per store link (max 10), own title/picture (pricehistory → Telegram preview stored in db.images using settings.public_base from POST /api/client-base) and price from text near the link.
