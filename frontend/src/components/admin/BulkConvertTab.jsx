@@ -103,6 +103,10 @@ const ResultCard = ({ it, i, onImage }) => {
 
 export const BulkConvertTab = () => {
   const [text, setText] = useState("");
+  useEffect(() => {
+    const t = localStorage.getItem("bulk_prefill");
+    if (t) { setText(t); localStorage.removeItem("bulk_prefill"); }
+  }, []);
   const [res, setRes] = useState(null);
   const [busy, setBusy] = useState(false);
   const run = async () => {

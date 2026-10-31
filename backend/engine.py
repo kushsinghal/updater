@@ -20,6 +20,7 @@ STORES = {
     "Myntra": ["myntra.com", "myntr.it"],
     "Ajio": ["ajio.com", "ajiio.in"],
     "Meesho": ["meesho.com"],
+    "Shopsy": ["shopsy.in"],
     "Croma": ["croma.com"],
     "Tata CLiQ": ["tatacliq.com"],
     "JioMart": ["jiomart.com"],
@@ -33,6 +34,8 @@ STORES = {
     "Woohoo": ["woohoo.in"],
     "Gyftr": ["gyftr.com"],
 }
+SANKMO_DEFAULT = ["Flipkart", "Myntra", "Ajio", "Shopsy", "Meesho", "Croma", "Tata CLiQ", "JioMart", "Nykaa", "Xiaomi",
+                  "Snapdeal", "Reliance Digital"]
 CATEGORIES = ["supercoin_100", "gift_card", "heavy_discount", "loot"]
 
 
@@ -136,7 +139,7 @@ def make_title(text):
 
 def parse_item(text, links, image, rules):
     def ok(l):
-        return l.startswith("http") and "t.me/" not in l and not re.search(r'\.(jpe?g|png|gif|webp)(\?|$)', l, re.I)
+        return l.startswith("http") and "t.me/" not in l and not re.search(r'\.(jpe?g|png|gif|webp|js|css|svg)(\?|/|$)|/raw/upload/|dash-front-assets', l, re.I)
     links = [l for l in links if ok(l)]
     links += [u for u in URL_RE.findall(text) if u not in links and ok(u)]
     if not links:
@@ -423,6 +426,9 @@ async def convert_link(url, settings):
         return url
     if is_amazon(url):
         return amazon_affiliate(url, settings.get("amazon_tag"))
+    allowed = settings.get("sankmo_stores") or SANKMO_DEFAULT
+    if detect_store(url) not in allowed:
+        return url
     if settings.get("convert_mode", "telegram") == "telegram":
         if not settings.get("tg_session"):
             return url

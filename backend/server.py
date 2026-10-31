@@ -39,7 +39,7 @@ DEFAULT_SETTINGS = {
     "convert_mode": "sankmo_api", "sankmo_bot": "sankmo_bot", "tg_api_id": "", "tg_api_hash": "", "tg_phone": "",
     "tg_session": "", "tg_user": "", "check_interval_minutes": 15, "check_interval_seconds": 60, "post_style": "simple", "max_posts_per_update": 20,
     "website_max_age_hours": 24, "telegram_max_age_minutes": 60, "last_run_at": None, "amazon_tag": "",
-    "copy_header": "🪙 100% SuperCoin Deals 🪙", "copy_link_style": "preview",
+    "copy_header": "🪙 100% SuperCoin Deals 🪙", "copy_link_style": "preview", "sankmo_stores": engine.SANKMO_DEFAULT,
 }
 SEED_SOURCES = ["dealsxpert", "TrickXpert", "lootdealsofficial", "desidime", "coolztricks", "omgdeals", "flipshope",
                 "cooloffersofficial", "dealsheaven", "GiftCardLoot", "TricksByStg", "freekamaal", "dealzarena"]
@@ -93,6 +93,7 @@ class SettingsIn(BaseModel):
     max_posts_per_update: Optional[int] = None
     amazon_tag: Optional[str] = None
     copy_header: Optional[str] = None
+    sankmo_stores: Optional[List[str]] = None
     copy_link_style: Optional[Literal["preview", "direct"]] = None
 
 
@@ -691,7 +692,8 @@ async def convert(body: ConvertIn):
     except Exception as e:
         if "login expired" in str(e):
             await db.settings.update_one({"id": "main"}, {"$set": {"tg_expired": True}})
-        return {"original": body.url, "cleaned": cleaned, "converted": cleaned, "changed": False, "error": str(e)[:300],
+        return {"original": body.url, "cleaned": cleaned, "converted": cleaned, "changed": False,
+                "error": (str(e) or ("Sankmo bot timed out" if isinstance(e, asyncio.TimeoutError) else type(e).__name__))[:300],
                 "store": engine.detect_store(cleaned)}
 
 
@@ -780,7 +782,8 @@ async def convert_bulk(body: BulkIn):
                 await db.settings.update_one({"id": "main"}, {"$set": {"tg_expired": True}})
         store = engine.detect_store(clean)
         if not err and out == clean:
-            err = "Add your Amazon tag first" if store == "Amazon" else "Sankmo not set up or returned no link"
+            err = ("Add your Amazon tag first" if store == "Amazon" else "Not a Sankmo store — link kept as is"
+                   if store not in (settings.get("sankmo_stores") or engine.SANKMO_DEFAULT) else "Sankmo not set up or returned no link")
         swaps.append((orig, out))
         code = uuid.uuid4().hex[:8]
         await db.links.insert_one({"code": code, "url": out, "store": store, **info, "created_at": now()})
@@ -1031,6 +1034,10 @@ async def fix_deal_site_links():
         aff = await safe_convert(clean, s)
         await db.deals.update_one({"id": d["id"]}, {"$set": {"clean_url": clean, "affiliate_url": aff, "converted": aff != clean,
                                                             "store": engine.detect_store(clean, d.get("text", ""))}})
+    allowed = s.get("sankmo_stores") or engine.SANKMO_DEFAULT
+    async for d in db.deals.find({"converted": True, "store": {"$ne": "Amazon"}}, {"_id": 0, "id": 1, "clean_url": 1}):
+        if engine.detect_store(d["clean_url"]) not in allowed:
+            await db.deals.update_one({"id": d["id"]}, {"$set": {"affiliate_url": d["clean_url"], "converted": False}})
 
 
 async def reprice_all():

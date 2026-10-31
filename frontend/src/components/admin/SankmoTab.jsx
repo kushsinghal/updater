@@ -102,6 +102,28 @@ const AmazonPanel = ({ s, setS }) => {
   );
 };
 
+const ALL_STORES = ["Flipkart", "Myntra", "Ajio", "Shopsy", "Meesho", "Croma", "Tata CLiQ", "JioMart", "Nykaa", "Xiaomi", "Snapdeal",
+  "Reliance Digital", "Paytm", "Swiggy", "Zomato", "Woohoo", "Gyftr"];
+
+const StoresPanel = ({ s, setS }) => {
+  const on = s.sankmo_stores || [];
+  const toggle = async (name) => {
+    const next = on.includes(name) ? on.filter((x) => x !== name) : [...on, name];
+    try { const { data } = await api.put("/settings", { sankmo_stores: next }); setS(data); }
+    catch (e) { toast.error(errMsg(e)); }
+  };
+  return (
+    <Panel testid="sankmo-stores-panel" title="Stores sent to Sankmo" desc="Only these stores are converted by Sankmo. Any other link (apps, Swiggy, movie sites, unknown shops) is still posted, but kept as a clean link.">
+      <div className="flex flex-wrap gap-2">
+        {ALL_STORES.map((n) => (
+          <button key={n} data-testid={`sankmo-store-${n.toLowerCase().replace(/\s+/g, "-")}`} onClick={() => toggle(n)}
+            className={`rounded-full border px-3 py-1 text-xs font-semibold transition-colors ${on.includes(n) ? "border-emerald-600 bg-emerald-50 text-emerald-800" : "border-slate-300 text-slate-500"}`}>{n}</button>
+        ))}
+      </div>
+    </Panel>
+  );
+};
+
 export const SankmoTab = () => {
   const [s, setS] = useState(null);
   const [token, setToken] = useState("");
@@ -146,6 +168,7 @@ export const SankmoTab = () => {
       </Panel>
       <Tester />
       <AmazonPanel s={s} setS={setS} />
+      <StoresPanel s={s} setS={setS} />
       <Button data-testid="sankmo-reconvert-button" className={`${ghostBtn} lg:col-span-2`}
         onClick={async () => { await api.post("/deals/reconvert"); toast.success("Converting the last 24h of deals to your Sankmo links in the background (takes a few minutes)"); }}>
         Convert existing deals (last 24h) to my Sankmo links

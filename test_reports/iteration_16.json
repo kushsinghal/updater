@@ -1,0 +1,32 @@
+{
+  "summary": "Tested the new price parser, deal-site link handling, the poller/cron, manual deal prices, and the bulk convert UI. All 18 pytest tests pass. Unit tests: engine.extract_prices returns the expected price/MRP for all 7 sample texts (Haier 45240/None, Armani 4979, Scooter 38950/52000, Gold 14359, Offer Price 1279/4599, Mokobara None, Instamart 328). is_deal_site is correct for the sample URLs. GET /api/deals: no deal has mrp <= price*1.03. 'Triple Loot Offers' has price 45240 and mrp 101990. The Armani deal has price 4979. No deal is marked converted while its clean_url is a deal site. POST /api/convert/bulk with the Armani post returns price 4979, mrp 19995, store_price 8399 and a fkrt.site link. POST /api/convert with the desidime URL returns cleaned=https://www.biba.in/us (no desidime), and it is not converted. POST /api/cron/fetch: 401 without auth, 200 {accepted:true} with the Bearer secret. last_scan_at changed within 150s. A manual deal (499/999) kept its prices after enrich and was then deleted. UI /admin Convert Links: the card shows ₹4,979, ₹19,995 struck through, 'store now ₹8,399 (before offers)' (bulk-store-price-0), and 'Converted to your Sankmo link'. Copy details + link gives 'Deal Price: ₹4,979 / MRP: ₹19,995 / 75% OFF'. The image proxy returns 200. Home page cards: Triple Loot ₹45,240 vs ₹1,01,990. The ₹8,443 card no longer shows the ₹8,445 MRP. Mokobara shows 'Price on store'.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/convert", "issue": "For the desidime link (biba.in, Sankmo timeout) error is '' (empty string) instead of a readable message. The single convert endpoint uses str(e) without the 'Sankmo bot timed out' fallback that convert_bulk has."},
+      {"endpoint": "engine.clean_link", "issue": "The desidime link resolved to https://www.biba.in/us. That looks like a geo redirect from the US server, not the real product/sale page. Indian users may land on the wrong store region. Consider stopping at the first store-domain URL instead of following redirects to the end."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": ["/app/backend/tests/test_iteration16_prices_dealsites.py", "/app/test_reports/pytest/iteration16.xml"],
+  "action_items": [
+    "Optional: in POST /api/convert, use the same empty-error fallback as convert_bulk ('Sankmo bot timed out')",
+    "Optional: avoid following store geo redirects (biba.in -> /us) when resolving deal-site links"
+  ],
+  "critical_code_review_comments": [
+    "The MRP cutoff is 1.02 in engine.extract_prices but 1.03 in server enrich/apply_post_price. They should match.",
+    "reprice_all runs only once, gated by prices_v2. Deals ingested before the fix and re-ingested later are fine.",
+    "fix_deal_site_links runs on every startup. Each unresolved deal-site deal makes an HTTP call (and possibly a bot conversion) on every restart. Mark deals already tried.",
+    "server.py is 1059 lines. It should be split into modules (deals, convert, cron, enrich)."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration16_prices_dealsites.py"],
+  "success_rate": {"backend": "100% (18/18)", "frontend": "100%"},
+  "seed_data_creation": "One TEST_ manual deal was created and deleted. Bulk converts added db.links docs. Telegram was not logged out.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Run with: pytest tests/test_iteration16_prices_dealsites.py (about 100s; includes a 150s max wait for the poller). pytest.ini adds xdist (-n). Use '-n 0' to see print output. Stats at test time: total 71 deals, 16 sources."
+}
