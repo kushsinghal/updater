@@ -8,7 +8,10 @@ export const setPrefs = (s) => {
   if (s.copy_header !== undefined) prefs.header = s.copy_header;
   if (s.copy_link_style) prefs.style = s.copy_link_style;
 };
-export const loadPrefs = () => api.get("/settings").then((r) => setPrefs(r.data)).catch(() => {});
+export const loadPrefs = () => {
+  api.post("/client-base", { text: "", base: process.env.REACT_APP_BACKEND_URL }).catch(() => {});
+  return api.get("/settings").then((r) => setPrefs(r.data)).catch(() => {});
+};
 export const previewUrl = (path) => `${API}/go/${path}`;
 
 export const dealText = ({ title, price, mrp, discount, store, link, preview }) => {

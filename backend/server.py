@@ -39,7 +39,7 @@ DEFAULT_SETTINGS = {
     "convert_mode": "sankmo_api", "sankmo_bot": "sankmo_bot", "tg_api_id": "", "tg_api_hash": "", "tg_phone": "",
     "tg_session": "", "tg_user": "", "check_interval_minutes": 15, "check_interval_seconds": 60, "post_style": "simple", "max_posts_per_update": 20,
     "website_max_age_hours": 24, "telegram_max_age_minutes": 60, "last_run_at": None, "amazon_tag": "",
-    "copy_header": "🪙 100% SuperCoin Deals 🪙", "copy_link_style": "preview", "sankmo_stores": engine.SANKMO_DEFAULT,
+    "copy_header": "🪙 100% SuperCoin Deals 🪙", "copy_link_style": "preview", "sankmo_stores": engine.SANKMO_DEFAULT, "split_multi": True,
 }
 SEED_SOURCES = ["dealsxpert", "TrickXpert", "lootdealsofficial", "desidime", "coolztricks", "omgdeals", "flipshope",
                 "cooloffersofficial", "dealsheaven", "GiftCardLoot", "TricksByStg", "freekamaal", "dealzarena"]
@@ -94,6 +94,7 @@ class SettingsIn(BaseModel):
     amazon_tag: Optional[str] = None
     copy_header: Optional[str] = None
     sankmo_stores: Optional[List[str]] = None
+    split_multi: Optional[bool] = None
     copy_link_style: Optional[Literal["preview", "direct"]] = None
 
 
@@ -301,11 +302,16 @@ async def ingest(parsed, source, settings, autopost, budget=None):
     since = (datetime.now(timezone.utc) - timedelta(days=2)).isoformat()
     deal["title_key"] = re.sub(r"[^a-z0-9]", "", deal["title"].lower())[:60]
     deal["product_key"] = engine.product_key(deal["clean_url"])
-    dup = [{"clean_url": deal["clean_url"]}, {"title_key": deal["title_key"]}]
+    dup = [{"clean_url": deal["clean_url"]}]
+    if not deal.get("split"):
+        recent = (datetime.now(timezone.utc) - timedelta(hours=6)).isoformat()
+        dup.append({"title_key": deal["title_key"], "source_id": {"$ne": source["id"]}, "created_at": {"$gte": recent}})
     if deal["product_key"]:
         dup.append({"product_key": deal["product_key"], "price": deal.get("price")})
     if source["id"] != "manual" and await db.deals.find_one({"$or": dup, "created_at": {"$gte": since}}, {"_id": 1}):
         return None
+    if deal.get("split"):
+        await fill_split_info(deal, settings)
     if not deal.get("image") and "flipkart" not in deal["clean_url"]:
         deal["image"] = await engine.fetch_og_image(deal["clean_url"])
     await record_price(deal)
@@ -322,6 +328,58 @@ async def ingest(parsed, source, settings, autopost, budget=None):
         if budget is not None and results:
             budget["left"] -= 1
     return deal
+
+
+SPLIT_MAX = 10
+
+
+async def fill_split_info(deal, settings):
+    """Give each split product its own name and picture."""
+    info = await deal_info(deal["clean_url"])
+    image = info.get("image")
+    title = info.get("title")
+    base = settings.get("public_base")
+    if (not image or not title) and base and engine.detect_store(deal["clean_url"]) != "Amazon":
+        try:
+            p = (await tgconv.web_previews([deal["clean_url"]], settings)).get(deal["clean_url"]) or {}
+            if not image and p.get("photo"):
+                pid = uuid.uuid4().hex
+                await db.images.insert_one({"id": pid, "data": p["photo"], "ctype": "image/jpeg", "created_at": now()})
+                image = f"{base}/api/img/{pid}"
+            ptitle = re.split(r"\s+-\s+Buy\s|\s+\|\s+Flipkart", html_lib.unescape(p.get("title") or ""))[0].strip()
+            if not title and ptitle and not re.search(r"Online Shopping|All Categories|^Flipkart", ptitle):
+                title = ptitle
+        except Exception as e:
+            logger.warning(f"split picture lookup failed: {e}")
+    deal["image"] = image or deal.get("image")
+    deal["title"] = (title or f"{deal['post_title']} ({deal['split_index']}/{deal['split_total']})")[:140]
+    deal["title_key"] = re.sub(r"[^a-z0-9]", "", deal["title"].lower())[:60]
+    if not deal.get("price") and info.get("price"):
+        deal["price"] = info["price"]
+        deal["mrp"] = info.get("mrp")
+
+
+@api.post("/client-base")
+async def client_base(body: BulkIn):
+    base = body.base.rstrip("/") if body.base and re.match(r"https://[\w.-]+/?$", body.base) else None
+    if base:
+        await db.settings.update_one({"id": "main"}, {"$set": {"public_base": base}})
+    return {"ok": bool(base)}
+
+
+def split_post(parsed, text, links, settings):
+    """A post with several store links becomes one deal per product link."""
+    urls = [u for u in dict.fromkeys(list(links) + engine.URL_RE.findall(text))
+            if engine.detect_store(u) != "Other" and "t.me/" not in u]
+    if not settings.get("split_multi", True) or len(urls) < 2:
+        return [parsed]
+    parts = []
+    for i, u in enumerate(urls[:SPLIT_MAX]):
+        price, mrp = engine.extract_prices(link_context(text, u))
+        parts.append({**parsed, "url": u, "store": engine.detect_store(u), "ext_id": f"{parsed['ext_id']}#{i}",
+                      "price": price, "mrp": mrp, "split": True, "split_index": i + 1, "split_total": min(len(urls), SPLIT_MAX),
+                      "post_title": parsed["title"]})
+    return parts
 
 
 async def fetch_source(src, budget=None):
@@ -342,8 +400,10 @@ async def fetch_source(src, budget=None):
         parsed["source_post_url"] = it.get("post_url")
         if it.get("title"):
             parsed["title"] = it["title"][:140]
-        if await ingest(parsed, src, settings, autopost=True, budget=budget):
-            new += 1
+        parts = split_post(parsed, it["text"], it["links"], settings)
+        for part in parts:
+            if await ingest(part, src, settings, autopost=True, budget=budget):
+                new += 1
     await db.sources.update_one({"id": src["id"]}, {"$set": {"last_fetched_at": now(), "last_error": None},
                                                     "$inc": {"total_deals": new}})
     return {"fetched": len(items), "new_deals": new, "error": None}

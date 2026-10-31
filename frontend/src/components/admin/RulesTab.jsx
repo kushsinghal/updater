@@ -25,7 +25,7 @@ export const RulesTab = () => {
   const set = (k) => (v) => setS({ ...s, [k]: v?.target ? v.target.value : v });
   const save = async () => {
     try { await api.put("/settings", {
-      auto_post: s.auto_post, supercoin_enabled: s.supercoin_enabled, giftcard_enabled: s.giftcard_enabled,
+      auto_post: s.auto_post, split_multi: s.split_multi !== false, supercoin_enabled: s.supercoin_enabled, giftcard_enabled: s.giftcard_enabled,
       giftcard_min: Number(s.giftcard_min), product_enabled: s.product_enabled, product_min: Number(s.product_min),
       loot_enabled: s.loot_enabled, post_style: s.post_style || "simple", check_interval_seconds: Number(s.check_interval_seconds),
       website_max_age_hours: Math.max(Number(s.website_max_age_hours) || 1, 1), telegram_max_age_minutes: Math.max(Number(s.telegram_max_age_minutes) || 1, 1),
@@ -36,6 +36,7 @@ export const RulesTab = () => {
     <Panel testid="rules-panel" title="What counts as a deal" desc="Only posts that match at least one rule are saved and sent to your channels.">
       <div className="space-y-3">
         <Row testid="rule-auto-post-switch" label="Auto-post to Telegram" desc="Send matching deals to your channels as soon as they're found" checked={s.auto_post} onToggle={set("auto_post")} />
+        <Row testid="rule-split-multi-switch" label="Split posts with many links" desc="A post with several product links becomes one deal per product (up to 10), each with its own picture and your link" checked={s.split_multi !== false} onToggle={set("split_multi")} />
         <div className="rounded-xl border border-slate-200 bg-[#F5F2EA] p-4">
           <p className="font-semibold">Telegram post style</p>
           <p className="mb-2 text-xs text-slate-500">Simple = product photo + bold title + your link (like big deal channels). Detailed = adds headline, MRP, % off and store.</p>
