@@ -80,7 +80,7 @@ const ResultCard = ({ it, i, onImage }) => {
         <div className="flex flex-wrap items-center gap-2">
           <span className="rounded bg-slate-900 px-2 py-0.5 font-mono text-[10px] uppercase text-white">{it.store}</span>
           {it.price && <span className="text-sm font-bold">{inr(it.price)}</span>}
-          {it.mrp && <span className="text-xs text-slate-400 line-through">{inr(it.mrp)}</span>}
+          {it.mrp > it.price && <span className="text-xs text-slate-400 line-through">{inr(it.mrp)}</span>}
           {it.store_price && it.store_price !== it.price && <span data-testid={`bulk-store-price-${i}`} className="text-[11px] text-slate-500">store now {inr(it.store_price)} (before offers)</span>}
           <span data-testid={`bulk-status-${i}`} className={`text-xs font-semibold ${it.changed ? "text-emerald-700" : "text-amber-600"}`}>
             {it.changed ? (it.store === "Amazon" ? "Your Amazon tag added" : "Converted to your Sankmo link") : it.error}
@@ -109,8 +109,9 @@ export const BulkConvertTab = () => {
   }, []);
   const [res, setRes] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [done, setDone] = useState([]);
   const run = async () => {
-    const urls = [...new Set((text.match(/https?:\/\/[^\s<>"')\]]+/g) || []).map((u) => u.replace(/[.,;!]+$/, "")).filter((u) => !u.includes("t.me/")))];
+    const urls = [...new Set((text.match(/https?:\/\/[^\s<>"')\]]+/g) || []).map((u) => u.replace(/[.,;!]+$/, "")).filter((u) => !u.includes("t.me/") && !done.includes(u)))];
     if (!urls.length) return toast.error("No links found. Paste one or more deal links.");
     const batch = urls.slice(0, MAX), chunks = [];
     for (let k = 0; k < batch.length; k += 3) chunks.push(batch.slice(k, k + 3));
@@ -130,12 +131,12 @@ export const BulkConvertTab = () => {
       if (skipped.length) toast.warning(`Found ${urls.length} links — converted the first ${MAX}. Load the next batch for the rest.`);
     } catch (e) { toast.error(errMsg(e)); } finally { setBusy(false); }
   };
-  const nextBatch = () => { setText(res.skipped.join("\n")); setRes(null); };
+  const nextBatch = () => { setDone([...done, ...res.items.map((it) => it.converted)]); setText(res.message); setRes(null); };
   return (
     <div className="space-y-6">
       <Panel testid="bulk-convert-panel" title="Convert up to 10 links at once"
         desc="Paste links or a whole deal message from anyone. Their tracking is removed, then each link becomes yours (Amazon: your tag, others: Sankmo).">
-        <Textarea data-testid="bulk-input" value={text} onChange={(e) => setText(e.target.value)} rows={7}
+        <Textarea data-testid="bulk-input" value={text} onChange={(e) => { setText(e.target.value); if (!e.target.value) setDone([]); }} rows={7}
           placeholder={"Paste here, e.g.\nBoat earbuds at 399 https://fkrt.it/xyz\nhttps://amzn.to/abc"} className="rounded-xl border-slate-300 bg-[#F5F2EA] font-mono text-xs" />
         <div className="mt-3 flex flex-wrap gap-2">
           <Button data-testid="bulk-convert-button" className={primaryBtn} disabled={busy || !text.trim()} onClick={run}>{busy ? `Converting… ${busy} done` : "Convert links"}</Button>

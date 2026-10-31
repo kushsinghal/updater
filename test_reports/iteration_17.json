@@ -1,0 +1,36 @@
+{
+  "summary": "Tested the Sankmo store allow-list, non-Sankmo links being kept, asset-link filtering, the convert error fallback and the 'Convert all links to mine' flow. All 10 pytest tests pass. POST /api/convert for play.google.com, district.in and the swiggy asset link returns changed=false, error=null, in 0.1-1.2s with no Sankmo call. A Flipkart link converts to fkrt.site. Myntra converts to myntra.bitIy.in. Bulk convert of non-Sankmo links gives status 'Not a Sankmo store — link kept as is'. Default sankmo_stores is the 12-store list. Toggling Myntra off (API and UI chip sankmo-store-myntra) keeps Myntra links unconverted, and the change persists after reload. Toggling back on works. Defaults were restored in the original order. Of 71 deals, none is converted outside the allowed stores (except Amazon). engine ok() rejects .js/.css/.svg and /raw/upload/ links. An fkrt.co link that timed out returns the error 'Sankmo bot timed out', not ''. UI: on the @brogity 17-link post, the Original post dialog has convert-post-links-button. It goes to /admin with the full post text in bulk-input. Converting gives '10 of 10 links converted'. Then 'Load next 7 links' puts the 7 remaining links in the input, and converting again gives 7 of 7 converted.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "engine.clean_link", "issue": "For the district.in URL 'https://www.district.in/webviews/movies/raavan-arcade&utm_source=social', cleaned is '...&utm_source=social/'. A trailing slash is added after the stray utm param, so the link is changed into a malformed one. It should strip '&utm_*' from the path, or leave such URLs untouched."},
+      {"endpoint": "POST /api/convert (fkrt.co/abcXYZ, fake code)", "issue": "An invalid short link waits for the full bot timeout (~20s) before giving 'Sankmo bot timed out'. This is acceptable."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "BulkConvertTab result card", "issue": "The MRP is shown struck through even when it equals the price (e.g. ₹1,234 next to struck-out ₹1,234 on the first Titan watch). Hide the MRP when mrp <= price.", "selector": "[data-testid=bulk-result-0]", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Convert Links → Load next", "issues": ["'Load next' replaces the input with only the remaining bare links. The post text (title/context) and the first batch's converted message are lost. The user never gets one full post with all 17 of their links, and must stitch the two 'Copy original message' outputs together by hand. Consider keeping the full text and swapping in the converted links across batches."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_iteration17_sankmo_stores.py", "/app/test_reports/pytest/iteration17.xml"],
+  "action_items": [
+    "Optional: fix clean_link adding '/' to URLs with '&utm_...' in the path (district.in case)",
+    "Optional: hide the struck-through MRP in bulk result cards when mrp <= price",
+    "Optional: across 'Load next' batches, keep the full post text and build one combined converted message"
+  ],
+  "critical_code_review_comments": [
+    "fix_deal_site_links checks detect_store(clean_url) against allowed, but the deal's stored 'store' can come from the text (detect_store(clean, text)). This is fine for un-converting. The reverse case (a store re-enabled later) does not re-convert old deals, so they stay clean until re-ingested.",
+    "PUT /settings sankmo_stores accepts any strings and is not checked against known store names. An empty list [] falls back to SANKMO_DEFAULT because of the 'or' check, so the user cannot switch off every store.",
+    "server.py is still over 1000 lines. It should be split into modules."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration17_sankmo_stores.py"],
+  "success_rate": {"backend": "100% (10/10)", "frontend": "100%"},
+  "seed_data_creation": "None. Bulk converts added db.links docs. sankmo_stores restored to the default order. Telegram is still connected.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run: cd /app/backend && pytest tests/test_iteration17_sankmo_stores.py -n 0 -s (about 35s). Multi-link test deal: 9c230bcf-0ba7-4512-8a4b-f39ca316581b (@brogity, 17 fkrt.co links). Do not log out of Telegram."
+}

@@ -740,6 +740,8 @@ async def deal_info(url):
         info["image"] = await engine.fetch_og_image(url)
     if info["title"]:
         info["title"] = html_lib.unescape(info["title"]).strip()
+    if info["price"] and info["mrp"] and info["mrp"] <= info["price"] * 1.03:
+        info["mrp"] = None
     return info
 
 

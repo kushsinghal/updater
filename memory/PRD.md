@@ -101,3 +101,11 @@ Website that finds big deals (Flipkart 100% SuperCoin, gift card discounts, heav
 - Auto Flipkart pictures in bulk convert: Telegram link preview (GetWebPagePreview via the connected Telegram account, after conversions, under tgconv lock) → photo stored in db.images, served at /api/img/{id}; titles cleaned.
 - Bulk convert up to 10 links (frontend sends batches of 3 with progress), "Load next" for more.
 - Alternatives to Sankmo researched: Cuelinks API, INRDeals, EarnKaro, ExtraPe, Affiliaters, Amazon PA-API.
+
+## Iteration 15 (Jun 2026)
+- New price parser (deal price keywords > weak keywords > ₹ amounts; skips coupon/bank/cashback lines, units, MRP phrases; K suffix). Enrich keeps post price (text_price), store price only as fallback; MRP dropped if ≤ price+3%; discount/categories recomputed. One-time reprice_all (prices_v2).
+- Bulk convert uses the price written next to each link in the post (store_price shown as "before offers").
+- Desidime deal pages resolved to store via visit.desidime.com; deal-site links never sent to Sankmo.
+- Sankmo store allow-list (settings.sankmo_stores, chips in Affiliate Setup); other links posted clean. Asset links (.js/.css/raw/upload) ignored.
+- Original post dialog: "Convert all links to mine" → Convert Links prefilled; "Load next" keeps the full message with earlier converted links.
+- WEBHOOK_CRON_SECRET added to backend .env.
