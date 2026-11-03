@@ -27,7 +27,7 @@ const CopySettings = () => {
   const [header, setHeader] = useState(prefs.header);
   const [style, setStyle] = useState(prefs.style);
   useEffect(() => {
-    api.get("/settings").then(({ data }) => { setPrefs(data); setHeader(data.copy_header ?? ""); setStyle(data.copy_link_style || "preview"); }).catch(() => {});
+    api.get("/settings").then(({ data }) => { setPrefs(data); setHeader(data.copy_header ?? ""); setStyle(data.copy_link_style || "direct"); }).catch(() => {});
   }, []);
   const save = async (extra = {}) => {
     try {
@@ -48,7 +48,7 @@ const CopySettings = () => {
           <Input data-testid="copy-header-input" value={header} onChange={(e) => setHeader(e.target.value)} placeholder="Top line (empty = none)" className={fieldCls} />
           <Button data-testid="copy-header-save-button" className={primaryBtn} onClick={() => save()}>Save</Button>
         </div>
-        <div className="flex flex-wrap gap-2">{opt("preview", "Link with picture preview (recommended)")}{opt("direct", "Direct affiliate link")}</div>
+        <div className="flex flex-wrap gap-2">{opt("direct", "My Sankmo / affiliate link (recommended)")}{opt("preview", "Website link with picture preview")}</div>
       </div>
     </Panel>
   );

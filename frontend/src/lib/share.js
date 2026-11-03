@@ -3,7 +3,7 @@ import { api, inr } from "@/lib/api";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
-export const prefs = { header: "🪙 100% SuperCoin Deals 🪙", style: "preview" };
+export const prefs = { header: "🪙 100% SuperCoin Deals 🪙", style: "direct" };
 export const setPrefs = (s) => {
   if (s.copy_header !== undefined) prefs.header = s.copy_header;
   if (s.copy_link_style) prefs.style = s.copy_link_style;

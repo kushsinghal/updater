@@ -39,7 +39,7 @@ DEFAULT_SETTINGS = {
     "convert_mode": "sankmo_api", "sankmo_bot": "sankmo_bot", "tg_api_id": "", "tg_api_hash": "", "tg_phone": "",
     "tg_session": "", "tg_user": "", "check_interval_minutes": 15, "check_interval_seconds": 60, "post_style": "simple", "max_posts_per_update": 20,
     "website_max_age_hours": 24, "telegram_max_age_minutes": 60, "last_run_at": None, "amazon_tag": "",
-    "copy_header": "🪙 100% SuperCoin Deals 🪙", "copy_link_style": "preview", "sankmo_stores": engine.SANKMO_DEFAULT, "split_multi": True,
+    "copy_header": "🪙 100% SuperCoin Deals 🪙", "copy_link_style": "direct", "sankmo_stores": engine.SANKMO_DEFAULT, "split_multi": True,
 }
 SEED_SOURCES = ["dealsxpert", "TrickXpert", "lootdealsofficial", "desidime", "coolztricks", "omgdeals", "flipshope",
                 "cooloffersofficial", "dealsheaven", "GiftCardLoot", "TricksByStg", "freekamaal", "dealzarena"]
@@ -843,7 +843,7 @@ async def deal_info(url):
     if not info["image"] and "flipkart" not in url:
         info["image"] = await engine.fetch_og_image(url)
     if info["title"]:
-        info["title"] = html_lib.unescape(info["title"]).strip()
+        info["title"] = re.sub(r"[\s\-–,|]+(?:for|with|and|by|of|in|-)?\s*$", "", html_lib.unescape(info["title"]).strip(), flags=re.I) or info["title"]
     if info["price"] and info["mrp"] and info["mrp"] <= info["price"] * 1.03:
         info["mrp"] = None
     return info
