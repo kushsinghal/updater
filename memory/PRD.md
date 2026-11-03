@@ -123,3 +123,6 @@ Website that finds big deals (Flipkart 100% SuperCoin, gift card discounts, heav
 ## Iteration 18 (Jun 2026)
 - Store split moved to Control Room → Deals tab (All/Flipkart/Amazon/Myntra/Ajio/Other with counts); public page store chips removed.
 - Offers: EMI/No-cost-EMI lines skipped (unless full payment also mentioned); % card offers keep "up to/max ₹X" cap; mark_best_card flags best full-payment card/wallet offer with saving; shown on cards + admin rows.
+
+## Iteration 19 (Jun 2026)
+- Copy link default = direct Sankmo/affiliate link (preview website link optional). engine.clean_title trims dangling words in all title paths.

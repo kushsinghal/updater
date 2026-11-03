@@ -520,7 +520,7 @@ def score(deal):
 
 
 def clean_title(t):
-    t = re.sub(r"[\s\-–,|]+(?:for|with|and|by|of|in|-)?\s*$", "", (t or "").strip(), flags=re.I)
+    t = re.sub(r"(?:[\s\-–,|&]+(?:for|with|and|by|of|in|-)?|\.{2,}|…)+\s*$", "", (t or "").strip(), flags=re.I)
     return t or None
 
 

@@ -1,0 +1,17 @@
+{
+  "summary": "Retest of the dangling-title fix from iteration 22. All checks pass. engine.clean_title trims a trailing For/with/of/and/by/in/- and leaves 'Titan Watch - For Men' unchanged. None of the 403 deals returned by GET /api/deals?limit=500 ends in a dangling word. On the Deals page, the copy button (copy-deal-link-button-{id}) copied 8 deals plus a TIMEX search result: each title came out as 'Unltd by TIMEX Group Analog Watch' with no trailing 'For', and each link was the direct fkrt.site or amazon.in link, never /api/go/. Settings copy_link_style is still 'direct'.",
+  "backend_issues": {"critical": [], "minor": [
+    {"endpoint": "engine.clean_title", "issue": "Trailing '&' and '...' are not trimmed, e.g. 'UV Doux Face Cleanser for Dry, Normal &' and 'MILTON ... Grey ...'. Cosmetic only."},
+    {"endpoint": "server.py ~line 939 (bulk link image/title update)", "issue": "upd['title'] = it['title'] or ptitle is saved without engine.clean_title. This may be the only path that misses it."}
+  ]},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": ["/app/backend/tests/test_iteration23_clean_title.py", "/app/test_reports/pytest/iteration23.xml"],
+  "action_items": ["Optional: add '&' and trailing ellipsis to the clean_title regex (in both engine.py and share.js)", "Optional: run engine.clean_title on the title at server.py ~line 939"],
+  "critical_code_review_comments": ["The clean_title regex is duplicated in frontend share.js dealText and in the startup cleanup query. Keep all three in sync.", "Including 'in' may over-trim titles like 'Plug in' or 'Built in'. Acceptable trade-off."],
+  "updated_files": ["/app/backend/tests/test_iteration23_clean_title.py"],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "seed_data_creation": "None",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "The Deals page is at '/'. Copy buttons use the testid prefix copy-deal-link-button-{id}. Grant clipboard permissions. Telegram is connected; do not log out. Leave copy_link_style as 'direct'."
+}

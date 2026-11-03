@@ -936,7 +936,7 @@ async def fill_pictures(items, previews, base):
         ptitle = re.split(r"\s+-\s+Buy\s|\s+\|\s+Flipkart", html_lib.unescape(p.get("title") or ""))[0].strip()
         if re.search(r"Online Shopping|Best Price in India - All Categories|^Flipkart", ptitle):
             ptitle = ""
-        upd = {"image": saved.get(it["cleaned"]), "title": it["title"] or ptitle or None}
+        upd = {"image": saved.get(it["cleaned"]), "title": engine.clean_title(it["title"] or ptitle)}
         it.update(upd)
         await db.links.update_one({"code": it["share_code"]}, {"$set": upd})
 
@@ -1133,7 +1133,7 @@ async def seed():
     if not settings.get("prices_v2"):
         asyncio.create_task(reprice_all())
     asyncio.create_task(fix_deal_site_links())
-    async for d in db.deals.find({"title": {"$regex": r"[\s\-–,|](for|with|and|by|of|in)\s*$", "$options": "i"}}, {"_id": 0, "id": 1, "title": 1}):
+    async for d in db.deals.find({"title": {"$regex": r"([\s\-–,|](for|with|and|by|of|in)|&|\.{2,}|…)\s*$", "$options": "i"}}, {"_id": 0, "id": 1, "title": 1}):
         await db.deals.update_one({"id": d["id"]}, {"$set": {"title": engine.clean_title(d["title"]) or d["title"]}})
     if not settings.get("offers_v1"):
         asyncio.create_task(add_offers_all())
