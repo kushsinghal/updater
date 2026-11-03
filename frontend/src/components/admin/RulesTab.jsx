@@ -25,7 +25,7 @@ export const RulesTab = () => {
   const set = (k) => (v) => setS({ ...s, [k]: v?.target ? v.target.value : v });
   const save = async () => {
     try { await api.put("/settings", {
-      auto_post: s.auto_post, split_multi: s.split_multi !== false, supercoin_enabled: s.supercoin_enabled, giftcard_enabled: s.giftcard_enabled,
+      auto_post: s.auto_post, split_multi: s.split_multi !== false, gold_enabled: s.gold_enabled !== false, supercoin_enabled: s.supercoin_enabled, giftcard_enabled: s.giftcard_enabled,
       giftcard_min: Number(s.giftcard_min), product_enabled: s.product_enabled, product_min: Number(s.product_min),
       loot_enabled: s.loot_enabled, post_style: s.post_style || "simple", check_interval_seconds: Number(s.check_interval_seconds),
       website_max_age_hours: Math.max(Number(s.website_max_age_hours) || 1, 1), telegram_max_age_minutes: Math.max(Number(s.telegram_max_age_minutes) || 1, 1),
@@ -78,6 +78,7 @@ export const RulesTab = () => {
           </div>
         </div>
         <Row testid="rule-supercoin-switch" label="Flipkart 100% SuperCoin" desc="Posts mentioning 100% off with SuperCoins" checked={s.supercoin_enabled} onToggle={set("supercoin_enabled")} />
+        <Row testid="rule-gold-switch" label="Gold & Silver deals" desc="Gold/silver coins, bars, jewellery and digital gold (24K, 22K, MMTC, Augmont, Tanishq…)" checked={s.gold_enabled !== false} onToggle={set("gold_enabled")} />
         <Row testid="rule-giftcard-switch" label="Gift card discounts" desc="Gift cards / vouchers at or above this discount" checked={s.giftcard_enabled} onToggle={set("giftcard_enabled")}>
           <div className="flex items-center gap-2"><Input data-testid="rule-giftcard-min-input" type="number" value={s.giftcard_min} onChange={set("giftcard_min")} className={`${fieldCls} w-20`} /><span className="text-sm text-slate-600">% off</span></div>
         </Row>

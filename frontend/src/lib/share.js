@@ -14,12 +14,14 @@ export const loadPrefs = () => {
 };
 export const previewUrl = (path) => `${API}/go/${path}`;
 
-export const dealText = ({ title, price, mrp, discount, store, link, preview }) => {
+export const dealText = ({ title, price, mrp, discount, store, link, preview, offers, store_price }) => {
   const off = price && mrp && mrp > price ? Math.round((1 - price / mrp) * 100) : discount ? Math.round(discount) : null;
   const lines = [`🔥 ${title || "Hot deal"}`, ""];
   if (price) lines.push(`✅ Deal Price: ${inr(price)}`);
   if (mrp && (!price || mrp > price)) lines.push(`❌ MRP: ${inr(mrp)}`);
   if (off) lines.push(`💥 ${off}% OFF`);
+  if (store_price && price && store_price > price) lines.push(`🏷️ Store price ${inr(store_price)} → you pay ${inr(price)}`);
+  (offers || []).forEach((o) => lines.push(`${{ bank: "💳", coupon: "🎟️", supercoin: "🪙", cashback: "💰" }[o.kind] || "•"} ${o.label}`));
   if (store && store !== "Other") lines.push(`🛒 Store: ${store}`);
   lines.push("", `👉 Buy now: ${preview && prefs.style === "preview" ? preview : link}`);
   return lines.join("\n");

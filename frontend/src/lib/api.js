@@ -9,6 +9,7 @@ export const CATS = {
   gift_card: { label: "Gift Cards", short: "Gift Card", color: "#06B6D4", cls: "bg-cyan-50 border-cyan-300 text-cyan-700" },
   heavy_discount: { label: "Price Drop", short: "Price Drop", color: "#10B981", cls: "bg-emerald-50 border-emerald-300 text-emerald-700" },
   loot: { label: "Loot / Price Error", short: "Loot", color: "#F43F5E", cls: "bg-rose-50 border-rose-300 text-rose-700" },
+  gold: { label: "Gold & Silver", short: "Gold", color: "#D4A017", cls: "bg-amber-50 border-amber-400 text-amber-800" },
 };
 
 export const errMsg = (e) => e?.response?.data?.detail || e?.message || "Something went wrong";

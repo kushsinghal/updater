@@ -21,7 +21,7 @@ const linkContext = (text, link) => {
 };
 const btn = "flex items-center gap-1.5 rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 transition-colors hover:bg-slate-200";
 const toDeal = (it) => ({ title: it.title, price: it.price, mrp: it.mrp, store: it.store, image: it.image, link: it.converted,
-  preview: it.share_code ? previewUrl(it.share_code) : null });
+  offers: it.offers, store_price: it.store_price, preview: it.share_code ? previewUrl(it.share_code) : null });
 
 const CopySettings = () => {
   const [header, setHeader] = useState(prefs.header);

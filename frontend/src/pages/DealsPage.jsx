@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Search, Coins, Gift, Percent, Siren, Radio, Trophy, Star, TrendingDown, RefreshCw } from "lucide-react";
+import { Search, Coins, Gift, Percent, Siren, Radio, Trophy, Star, TrendingDown, RefreshCw, Gem } from "lucide-react";
 import { toast } from "sonner";
 import { api, CATS, timeAgo } from "@/lib/api";
 import { DealCard } from "@/components/DealCard";
@@ -13,9 +13,12 @@ const FILTERS = [
   { key: "gift_card", label: "Gift Cards", icon: Gift, testid: "category-filter-giftcards" },
   { key: "heavy_discount", label: "Price Drop", icon: Percent, testid: "category-filter-heavy-discount" },
   { key: "loot", label: "Loot / Errors", icon: Siren, testid: "category-filter-loot" },
+  { key: "gold", label: "Gold & Silver", icon: Gem, testid: "category-filter-gold" },
   { key: "lowest", label: "Lowest Price Ever", icon: TrendingDown, testid: "category-filter-lowest" },
   { key: "starred", label: "Starred", icon: Star, testid: "category-filter-starred" },
 ];
+
+const STORES = ["All stores", "Flipkart", "Amazon", "Myntra", "Ajio", "Other"];
 
 const Hero = ({ stats, scan, scanning }) => {
   const every = stats ? (stats.check_interval_seconds < 60 ? `${stats.check_interval_seconds} sec` : `${Math.round(stats.check_interval_seconds / 60)} min`) : "…";
@@ -33,7 +36,7 @@ const Hero = ({ stats, scan, scanning }) => {
             Fresh loot,<br />found <span className="text-[#FF8A4C]">for you.</span>
           </h1>
           <p data-testid="last-scan-status" className="mt-5 font-mono text-xs text-slate-300 sm:text-sm">
-            Last scan {timeAgo(stats?.last_scan_at)} · {stats?.fresh_3h ?? "–"} fresh deal{stats?.fresh_3h === 1 ? "" : "s"} in the last {stats ? (stats.fresh_window_minutes >= 60 ? `${+(stats.fresh_window_minutes / 60).toFixed(1)}h` : `${stats.fresh_window_minutes} min`) : "…"} · newest deal posted {timeAgo(stats?.latest_deal_at)}
+            Last scan {timeAgo(stats?.last_scan_at)} · {stats?.fresh_3h ?? "–"} fresh deal{stats?.fresh_3h === 1 ? "" : "s"} in the last {stats ? (stats.fresh_window_minutes >= 60 ? `${+(stats.fresh_window_minutes / 60).toFixed(1)}h` : `${stats.fresh_window_minutes} min`) : "…"} · newest deal posted {timeAgo(stats?.latest_deal_at)} · website shows deals from the last {stats?.website_max_age_hours ?? "…"}h
           </p>
           <div className="mt-6 flex flex-wrap gap-2">
             {Object.entries(CATS).map(([k, c]) => (
@@ -59,6 +62,8 @@ export default function DealsPage() {
   const [minOff, setMinOff] = useState(70);
   const [q, setQ] = useState("");
   const [sort, setSort] = useState("latest");
+  const [store, setStore] = useState("All stores");
+  const params = () => ({ category: cat, q: q || undefined, sort, store: store === "All stores" ? undefined : store });
   const [loading, setLoading] = useState(true);
   const [tick, setTick] = useState(0);
 
@@ -71,13 +76,13 @@ export default function DealsPage() {
 
   useEffect(() => {
     if (tick) {
-      api.get("/deals", { params: { category: cat, q: q || undefined, sort } }).then((r) => setDeals(r.data));
+      api.get("/deals", { params: params() }).then((r) => setDeals(r.data));
       api.get("/stats").then((r) => setStats(r.data));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tick]);
 
-  const reload = () => api.get("/deals", { params: { category: cat, q: q || undefined, sort } }).then((r) => setDeals(r.data));
+  const reload = () => api.get("/deals", { params: params() }).then((r) => setDeals(r.data));
   const [scanning, setScanning] = useState(false);
   const scan = async () => {
     setScanning(true);
@@ -86,7 +91,7 @@ export default function DealsPage() {
       await api.post("/fetch-all");
       toast.success("Scanning all sources for new deals…");
       await new Promise((r) => setTimeout(r, 12000));
-      const { data } = await api.get("/deals", { params: { category: cat, q: q || undefined, sort } });
+      const { data } = await api.get("/deals", { params: params() });
       setDeals(data);
       api.get("/stats").then((r) => setStats(r.data));
       toast.success(data.length > before ? `${data.length - before} new deal(s) found` : "Deals are up to date");
@@ -96,12 +101,13 @@ export default function DealsPage() {
   useEffect(() => {
     setLoading(true);
     const t = setTimeout(() => {
-      api.get("/deals", { params: { category: cat, q: q || undefined, sort } })
+      api.get("/deals", { params: params() })
         .then((r) => setDeals(r.data))
         .finally(() => setLoading(false));
     }, 250);
     return () => clearTimeout(t);
-  }, [cat, q, sort]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cat, q, sort, store]);
 
   return (
     <main className="mx-auto max-w-7xl space-y-10 px-4 py-8 sm:px-8 sm:py-12">
@@ -113,6 +119,14 @@ export default function DealsPage() {
               className={`flex shrink-0 items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold transition-colors ${
                 cat === key ? "bg-slate-900 text-white shadow-md" : "border border-slate-200 bg-white text-slate-700 hover:border-[#FF5A1F] hover:text-[#FF5A1F]"}`}>
               <Icon className="h-4 w-4" /> {key === "heavy_discount" ? `${label} ${minOff}%+` : label}
+            </button>
+          ))}
+        </div>
+        <div className="no-scrollbar flex gap-2 overflow-x-auto">
+          {STORES.map((n) => (
+            <button key={n} data-testid={`store-filter-${n.toLowerCase().replace(/\s+/g, "-")}`} onClick={() => setStore(n)}
+              className={`shrink-0 rounded-lg px-3 py-1.5 text-xs font-bold uppercase tracking-wide transition-colors ${store === n ? "bg-[#FF5A1F] text-white" : "border border-slate-200 bg-white text-slate-600 hover:text-[#FF5A1F]"}`}>
+              {n === "Other" ? "Other stores" : n}
             </button>
           ))}
         </div>

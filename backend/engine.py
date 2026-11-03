@@ -36,7 +36,80 @@ STORES = {
 }
 SANKMO_DEFAULT = ["Flipkart", "Myntra", "Ajio", "Shopsy", "Meesho", "Croma", "Tata CLiQ", "JioMart", "Nykaa", "Xiaomi",
                   "Snapdeal", "Reliance Digital"]
-CATEGORIES = ["supercoin_100", "gift_card", "heavy_discount", "loot"]
+CATEGORIES = ["supercoin_100", "gift_card", "heavy_discount", "loot", "gold"]
+GOLD_RE = re.compile(
+    r'\b(?:gold|silver)\b[^\n]{0,40}?\b(?:coins?|bars?|pendants?|jewell?ery|chains?|rings?|earrings?|bangles?|gms?|grams?|24\s*k\w*|22\s*k\w*|999|916|hallmark\w*|bis)\b'
+    r'|\b(?:coins?|bars?|pendants?|jewell?ery)\b[^\n]{0,25}?\b(?:gold|silver)\b'
+    r'|\b(?:24|22|18)\s*(?:k|kt|karat|carat)\b|digital\s*gold'
+    r'|\b(?:mmtc|augmont|tanishq|caratlane|kalyan\s*jewell\w*|malabar\s*gold|joyalukkas|senco|safegold)\b', re.I)
+GOLD_NOT = re.compile(r'nescafe|coffee|\btea\b|\bdial\b|plated|rose\s*gold|gold\s*tone|golden|membership|prime|gold\s*card|contest|\bwin\b|gold\s*(?:pass|plan|member)', re.I)
+
+
+def is_gold(text):
+    for line in text.splitlines():
+        if GOLD_RE.search(line) and not GOLD_NOT.search(line):
+            return True
+    return False
+
+
+BANKS = ["HDFC", "SBI", "ICICI", "Axis", "Kotak", "IDFC", "OneCard", "BOB", "Bank of Baroda", "RBL", "HSBC", "Yes Bank", "AU",
+         "Federal", "IndusInd", "Citi", "AMEX", "American Express", "Standard Chartered", "Flipkart Axis", "Amazon Pay ICICI",
+         "Canara", "PNB", "Union Bank", "BOI", "DBS", "Paytm", "UPI", "Super.money", "Cred", "Mobikwik", "Amazon Pay", "PhonePe"]
+BANK_RE = re.compile(r'\b(' + "|".join(re.escape(b) for b in sorted(BANKS, key=len, reverse=True)) + r')\b', re.I)
+CARD_RE = re.compile(r'\b(credit\s*card|debit\s*card|cc|dc|emi|card|upi|wallet)\b', re.I)
+OFF_AMT_RE = re.compile(r'(?:₹|rs\.?|inr)\s*([\d,]*\d)|([\d,]*\d)\s*(?:₹|rs\b|/-)|(\d{1,2}(?:\.\d+)?)\s*%', re.I)
+COINS_RE = re.compile(r'([\d,]*\d)\s*super\s*coins?|super\s*coins?[^\n\d]{0,20}([\d,]*\d)\b(?!\s*%)', re.I)
+CODE_RE = re.compile(r'\b(?:code|coupon\s*code)\s*[:\-]?\s*([A-Z0-9]{4,20})\b')
+
+
+def _amount_label(line):
+    m = OFF_AMT_RE.search(line)
+    if not m:
+        return None, ""
+    if m.group(3):
+        return float(m.group(3)), f"{m.group(3).rstrip('0').rstrip('.') if '.' in m.group(3) else m.group(3)}%"
+    v = to_num(m.group(1) or m.group(2))
+    return v, f"₹{v:,.0f}" if v else ""
+
+
+def extract_offers(text):
+    """Bank/card, coupon, cashback and SuperCoin offers written in a deal post."""
+    offers, seen = [], set()
+    if SUPERCOIN_RE.search(text):
+        offers.append({"kind": "supercoin", "label": "100% SuperCoins back — almost FREE"})
+        seen.add("supercoin")
+    for raw in INVISIBLE.sub("", text).splitlines():
+        line = URL_RE.sub("", raw).strip(" •*-–>✅❌👉🔥💳🏦")
+        if not line or len(line) > 160:
+            continue
+        bank = BANK_RE.search(line)
+        low = line.lower()
+        amt, amt_txt = _amount_label(line)
+        if bank and (CARD_RE.search(line) or "off" in low or "discount" in low or "cashback" in low) and amt:
+            name = bank.group(1)
+            card = CARD_RE.search(line)
+            ctype = {"cc": "Credit Card", "dc": "Debit Card"}.get(card.group(1).lower(), card.group(1).title()) if card else "Card"
+            key = f"bank:{name.lower()}:{amt}"
+            if key not in seen:
+                seen.add(key)
+                offers.append({"kind": "bank", "label": f"{amt_txt} {'cashback' if 'cashback' in low else 'off'} with {name} {ctype}".replace("Card Card", "Card"), "amount": amt})
+        elif "coupon" in low and amt:
+            code = CODE_RE.search(raw)
+            key = f"coupon:{amt}"
+            if key not in seen:
+                seen.add(key)
+                offers.append({"kind": "coupon", "label": f"{amt_txt} coupon" + (f" (code {code.group(1)})" if code else ""), "amount": amt})
+        elif "cashback" in low and amt:
+            key = f"cashback:{amt}"
+            if key not in seen:
+                seen.add(key)
+                offers.append({"kind": "cashback", "label": f"{amt_txt} cashback" + (f" via {bank.group(1)}" if bank else ""), "amount": amt})
+        elif "supercoin" not in seen and re.search(r"super\s*coins?", line, re.I):
+            m = COINS_RE.search(line)
+            n = m and (m.group(1) or m.group(2))
+            seen.add("supercoin")
+            offers.append({"kind": "supercoin", "label": f"Use {n} SuperCoins" if n else "Extra savings with SuperCoins"})
+    return offers[:6]
 
 
 def to_num(s):
@@ -120,6 +193,8 @@ def classify(text, discount, rules):
         cats.append("heavy_discount")
     if rules.get("loot_enabled", True) and LOOT_RE.search(text):
         cats.append("loot")
+    if rules.get("gold_enabled", True) and is_gold(text):
+        cats.append("gold")
     for kw in rules.get("keywords", []):
         if kw and kw.lower() in text.lower() and "loot" not in cats:
             cats.append("loot")
@@ -475,11 +550,26 @@ async def convert_link(url, settings):
 
 
 HEADLINES = {"supercoin_100": "🪙 100% SUPERCOIN DEAL", "gift_card": "🎁 GIFT CARD OFFER",
-             "loot": "🚨 LOOT / PRICE ERROR", "heavy_discount": "🔥 HEAVY DISCOUNT"}
+             "loot": "🚨 LOOT / PRICE ERROR", "heavy_discount": "🔥 HEAVY DISCOUNT", "gold": "🪙 GOLD & SILVER DEAL"}
 
 
 def inr(v):
     return f"₹{v:,.0f}" if v else None
+
+
+OFFER_ICONS = {"bank": "💳", "coupon": "🎟️", "supercoin": "🪙", "cashback": "💰"}
+
+
+def offer_lines(deal):
+    out = []
+    sp, p = deal.get("store_price"), deal.get("price")
+    if sp and p and sp > p:
+        out.append(f"🏷️ Store {inr(sp)} → you pay {inr(p)}")
+    for o in deal.get("offers") or []:
+        if o["kind"] == "supercoin" and "supercoin" in deal["title"].lower() and "100%" in o["label"]:
+            continue
+        out.append(f"{OFFER_ICONS.get(o['kind'], '•')} {html.escape(o['label'])}")
+    return out
 
 
 def format_message(deal, style="simple"):
@@ -492,9 +582,12 @@ def format_message(deal, style="simple"):
             prefix = "100% Supercoins Back: "
         elif "gift_card" in cats and "gift" not in deal["title"].lower():
             prefix = "Gift Card Deal: "
+        elif "gold" in cats and not re.search(r"gold|silver", deal["title"], re.I):
+            prefix = "Gold Deal: "
         lines = [f"<b>{prefix}{title}</b>"]
         if deal.get("price"):
             lines.append(f"Price: {inr(deal['price'])}" + (f" (MRP {inr(deal['mrp'])})" if deal.get("mrp") else ""))
+        lines += offer_lines(deal)
         lines.append(link)
         return "\n".join(lines)
     head = HEADLINES.get((deal.get("categories") or ["heavy_discount"])[0], "🔥 DEAL")
@@ -509,6 +602,7 @@ def format_message(deal, style="simple"):
     if price_line:
         lines.append(" | ".join(price_line))
     lines.append(f"Store: {html.escape(deal.get('store', ''))}")
+    lines += offer_lines(deal)
     if deal.get("note"):
         lines += ["", html.escape(deal["note"])]
     lines += ["", f"👉 {deal.get('affiliate_url') or deal['url']}"]

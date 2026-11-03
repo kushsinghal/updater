@@ -33,7 +33,7 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(level
 NO_ID = {"_id": 0}
 BULK_MAX = 10
 DEFAULT_SETTINGS = {
-    "id": "main", "auto_post": True, "supercoin_enabled": True, "giftcard_enabled": True, "giftcard_min": 5,
+    "id": "main", "auto_post": True, "supercoin_enabled": True, "gold_enabled": True, "giftcard_enabled": True, "giftcard_min": 5,
     "product_enabled": True, "product_min": 70, "loot_enabled": True, "keywords": [],
     "convert_enabled": True, "sankmo_api_url": "", "sankmo_token": "",
     "convert_mode": "sankmo_api", "sankmo_bot": "sankmo_bot", "tg_api_id": "", "tg_api_hash": "", "tg_phone": "",
@@ -74,6 +74,7 @@ class DestinationIn(BaseModel):
 class SettingsIn(BaseModel):
     auto_post: Optional[bool] = None
     supercoin_enabled: Optional[bool] = None
+    gold_enabled: Optional[bool] = None
     giftcard_enabled: Optional[bool] = None
     giftcard_min: Optional[float] = None
     product_enabled: Optional[bool] = None
@@ -264,7 +265,8 @@ async def enrich(deal_id):
         discount = d.get("discount") if manual else engine.extract_discount(d.get("text", ""), price, mrp)
         settings = await get_settings()
         cats = d.get("categories") if d.get("source_id") == "manual" else engine.classify(d.get("text", ""), discount, settings)
-        upd.update({"price": price, "mrp": mrp, "discount": discount, "categories": cats})
+        upd.update({"price": price, "mrp": mrp, "discount": discount, "categories": cats,
+                    "store_price": ph.get("price") if ph.get("price") and price and ph["price"] > price * 1.01 else None})
         if price and ph.get("min"):
             upd["lowest_ever"] = price <= ph["min"]
     await db.deals.update_one({"id": deal_id}, {"$set": upd})
@@ -297,6 +299,7 @@ async def ingest(parsed, source, settings, autopost, budget=None):
         except Exception as e:
             logger.warning(f"dealsmagnet resolve failed: {e}")
     deal["clean_url"] = await engine.clean_link(deal["url"])
+    deal["offers"] = engine.extract_offers(f"{deal.get('text', '')}\n{deal.get('note') or ''}")
     if deal.get("store") == "Other":
         deal["store"] = engine.detect_store(deal["clean_url"], deal.get("text", ""))
     since = (datetime.now(timezone.utc) - timedelta(days=2)).isoformat()
@@ -304,7 +307,7 @@ async def ingest(parsed, source, settings, autopost, budget=None):
     deal["product_key"] = engine.product_key(deal["clean_url"])
     dup = [{"clean_url": deal["clean_url"]}]
     if not deal.get("split"):
-        recent = (datetime.now(timezone.utc) - timedelta(hours=6)).isoformat()
+        recent = (datetime.now(timezone.utc) - timedelta(hours=3)).isoformat()
         dup.append({"title_key": deal["title_key"], "source_id": {"$ne": source["id"]}, "created_at": {"$gte": recent}})
     if deal["product_key"]:
         dup.append({"product_key": deal["product_key"], "price": deal.get("price")})
@@ -333,30 +336,54 @@ async def ingest(parsed, source, settings, autopost, budget=None):
 SPLIT_MAX = 10
 
 
+async def tg_picture(clean, settings, need_image=True):
+    """Product photo + name via Telegram's link preview (stores don't block Telegram)."""
+    base = settings.get("public_base")
+    if not base or engine.detect_store(clean) == "Amazon":
+        return None, None
+    try:
+        p = (await tgconv.web_previews([clean], settings)).get(clean) or {}
+    except Exception as e:
+        logger.warning(f"picture lookup failed: {e}")
+        return None, None
+    image = None
+    if need_image and p.get("photo"):
+        pid = uuid.uuid4().hex
+        await db.images.insert_one({"id": pid, "data": p["photo"], "ctype": "image/jpeg", "created_at": now()})
+        image = f"{base}/api/img/{pid}"
+    title = re.split(r"\s+-\s+Buy\s|\s+\|\s+Flipkart", html_lib.unescape(p.get("title") or ""))[0].strip()
+    if re.search(r"Online Shopping|All Categories|^Flipkart", title):
+        title = ""
+    return image, title or None
+
+
+async def product_details(clean, settings):
+    info = await deal_info(clean)
+    if not info.get("image") or not info.get("title"):
+        image, title = await tg_picture(clean, settings, need_image=not info.get("image"))
+        info["image"] = info.get("image") or image
+        info["title"] = info.get("title") or title
+    return info
+
+
 async def fill_split_info(deal, settings):
     """Give each split product its own name and picture."""
-    info = await deal_info(deal["clean_url"])
-    image = info.get("image")
-    title = info.get("title")
-    base = settings.get("public_base")
-    if (not image or not title) and base and engine.detect_store(deal["clean_url"]) != "Amazon":
-        try:
-            p = (await tgconv.web_previews([deal["clean_url"]], settings)).get(deal["clean_url"]) or {}
-            if not image and p.get("photo"):
-                pid = uuid.uuid4().hex
-                await db.images.insert_one({"id": pid, "data": p["photo"], "ctype": "image/jpeg", "created_at": now()})
-                image = f"{base}/api/img/{pid}"
-            ptitle = re.split(r"\s+-\s+Buy\s|\s+\|\s+Flipkart", html_lib.unescape(p.get("title") or ""))[0].strip()
-            if not title and ptitle and not re.search(r"Online Shopping|All Categories|^Flipkart", ptitle):
-                title = ptitle
-        except Exception as e:
-            logger.warning(f"split picture lookup failed: {e}")
-    deal["image"] = image or deal.get("image")
-    deal["title"] = (title or f"{deal['post_title']} ({deal['split_index']}/{deal['split_total']})")[:140]
+    info = await product_details(deal["clean_url"], settings)
+    deal["image"] = info.get("image") or deal.get("image")
+    deal["title"] = (info.get("title") or f"{deal['post_title']} ({deal['split_index']}/{deal['split_total']})")[:140]
     deal["title_key"] = re.sub(r"[^a-z0-9]", "", deal["title"].lower())[:60]
     if not deal.get("price") and info.get("price"):
         deal["price"] = info["price"]
         deal["mrp"] = info.get("mrp")
+
+
+@api.get("/lookup")
+async def lookup(url: str):
+    if not url.startswith("http"):
+        raise HTTPException(400, "Paste a full product link")
+    clean = await engine.clean_link(url.strip())
+    info = await product_details(clean, await get_settings())
+    return {"cleaned": clean, "store": engine.detect_store(clean), **info}
 
 
 @api.post("/client-base")
@@ -443,14 +470,18 @@ async def poller():
 @api.get("/deals")
 async def list_deals(category: Optional[str] = None, q: Optional[str] = None, store: Optional[str] = None,
                      sort: str = "latest", limit: int = 120):
-    query = {}
+    s = await get_settings()
+    cutoff_iso = (datetime.now(timezone.utc) - timedelta(hours=s.get("website_max_age_hours", 24))).isoformat()
+    query = {} if category == "starred" else {"$and": [{"$or": [{"posted_at": {"$gte": cutoff_iso}}, {"featured": True}]}]}
     proj = {**NO_ID, "dedupe_key": 0}
     if category == "best":
         cutoff = (datetime.now(timezone.utc) - timedelta(days=1)).isoformat()
-        query["$or"] = [{"featured": True}, {"posted_at": {"$gte": cutoff}, "score": {"$gte": 100}}]
+        query = {"$or": [{"featured": True}, {"posted_at": {"$gte": max(cutoff, cutoff_iso)}, "score": {"$gte": 100}}]}
         if q:
             query["$and"] = [{"$or": [{"title": {"$regex": re.escape(q), "$options": "i"}},
                                       {"store": {"$regex": re.escape(q), "$options": "i"}}]}]
+        if store:
+            query["store"] = {"$nin": MAJOR_STORES} if store == "Other" else store
         return await db.deals.find(query, proj).sort([("posted_at", -1)]).to_list(40)
     if category == "starred":
         query["featured"] = True
@@ -459,7 +490,7 @@ async def list_deals(category: Optional[str] = None, q: Optional[str] = None, st
     elif category and category != "all":
         query["categories"] = category
     if store:
-        query["store"] = store
+        query["store"] = {"$nin": MAJOR_STORES} if store == "Other" else store
     if q:
         rq = re.escape(q)
         query["$or"] = [{"title": {"$regex": rq, "$options": "i"}}, {"store": {"$regex": rq, "$options": "i"}}]
@@ -529,7 +560,7 @@ async def add_deal(body: DealIn):
     price, mrp = body.price, body.mrp
     discount = body.discount if body.discount is not None else engine.extract_discount(text, price, mrp)
     cats = body.categories if body.categories else engine.classify(text, discount, settings)
-    deal = {"title": body.title or engine.make_title(body.url), "text": body.note or "", "note": body.note,
+    deal = {"title": body.title or engine.make_title(body.url), "text": text, "note": body.note,
             "url": body.url.strip(), "store": engine.detect_store(body.url, text), "price": price, "mrp": mrp,
             "discount": discount or 0, "categories": cats or ["heavy_discount"], "image": body.image}
     src = {"id": "manual", "name": "Manual"}
@@ -565,11 +596,17 @@ async def delete_deal(deal_id: str):
     return {"ok": True}
 
 
+MAJOR_STORES = ["Flipkart", "Amazon", "Myntra", "Ajio"]
+
+
 @api.get("/stats")
 async def stats():
-    out = {"total": await db.deals.count_documents({})}
+    st = await get_settings()
+    vis = {"posted_at": {"$gte": (datetime.now(timezone.utc) - timedelta(hours=st.get("website_max_age_hours", 24))).isoformat()}}
+    out = {"total": await db.deals.count_documents(vis), "all_time": await db.deals.count_documents({}),
+           "website_max_age_hours": st.get("website_max_age_hours", 24)}
     for c in engine.CATEGORIES:
-        out[c] = await db.deals.count_documents({"categories": c})
+        out[c] = await db.deals.count_documents({**vis, "categories": c})
     out["sources"] = await db.sources.count_documents({"enabled": True})
     out["destinations"] = await db.destinations.count_documents({"enabled": True})
     out["posts_sent"] = await db.logs.count_documents({"status": "success"})
@@ -830,7 +867,9 @@ async def convert_bulk(body: BulkIn):
     cleaned = await asyncio.gather(*[engine.clean_link(u) for u in links])
     infos = await asyncio.gather(*[deal_info(c) for c in cleaned])
     for link, info in zip(links, infos):
-        apply_post_price(info, link_context(body.text, link))
+        ctx = link_context(body.text, link)
+        apply_post_price(info, ctx)
+        info["offers"] = engine.extract_offers(ctx)
     missing = list(dict.fromkeys(c for c, i in zip(cleaned, infos) if not i["image"] and engine.detect_store(c) != "Amazon"))
     base = body.base.rstrip("/") if body.base and re.match(r"https://[\w.-]+$", body.base.rstrip("/")) else None
     items, swaps = [], []
@@ -1086,6 +1125,19 @@ async def seed():
     if not settings.get("prices_v2"):
         asyncio.create_task(reprice_all())
     asyncio.create_task(fix_deal_site_links())
+    if not settings.get("offers_v1"):
+        asyncio.create_task(add_offers_all())
+
+
+async def add_offers_all():
+    s = await get_settings()
+    async for d in db.deals.find({}, {"_id": 0, "id": 1, "text": 1, "note": 1, "discount": 1, "source_id": 1, "categories": 1}):
+        text = f"{d.get('text', '')}\n{d.get('note') or ''}"
+        upd = {"offers": engine.extract_offers(text)}
+        if d.get("source_id") != "manual":
+            upd["categories"] = engine.classify(text, d.get("discount") or 0, s)
+        await db.deals.update_one({"id": d["id"]}, {"$set": upd})
+    await db.settings.update_one({"id": "main"}, {"$set": {"offers_v1": True}})
 
 
 async def fix_deal_site_links():
