@@ -19,7 +19,7 @@ export const OffersBox = ({ deal }) => {
         const Icon = ICONS[o.kind] || Ticket;
         if (o.best) return (
           <p key={i} data-testid={`deal-best-card-${deal.id}`} className="flex items-start gap-1.5 rounded-lg bg-emerald-100 px-2 py-1 text-xs font-bold text-emerald-800">
-            <Icon className="mt-0.5 h-3.5 w-3.5 shrink-0" /> Best card (full payment): {o.label}{o.saving ? ` · save ${inr(o.saving)}` : ""}
+            <Icon className="mt-0.5 h-3.5 w-3.5 shrink-0" /> {o.wallet ? "Best payment offer" : "Best card offer"} (full payment): {o.label}{o.saving ? ` · save ${inr(o.saving)}` : ""}
           </p>
         );
         return (

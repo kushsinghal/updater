@@ -119,3 +119,7 @@ Website that finds big deals (Flipkart 100% SuperCoin, gift card discounts, heav
 - Gold & Silver category (engine.is_gold, gold_enabled rule, website tab, Telegram prefix/headline, destination routing).
 - Store tabs (Flipkart/Amazon/Myntra/Ajio/Other). Offer breakdown (engine.extract_offers: bank/card, coupon, cashback, SuperCoins; store_price → you pay) on cards, copy text, Telegram posts, bulk convert.
 - Manual add: /api/lookup auto-fills title/price/MRP/image; note chips (100% SuperCoins = completely FREE, bank, coupon, cashback).
+
+## Iteration 18 (Jun 2026)
+- Store split moved to Control Room → Deals tab (All/Flipkart/Amazon/Myntra/Ajio/Other with counts); public page store chips removed.
+- Offers: EMI/No-cost-EMI lines skipped (unless full payment also mentioned); % card offers keep "up to/max ₹X" cap; mark_best_card flags best full-payment card/wallet offer with saving; shown on cards + admin rows.

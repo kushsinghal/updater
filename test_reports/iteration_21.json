@@ -1,0 +1,28 @@
+{
+  "summary": "Tested the move of the store split into Control Room → Deals and the automatic best-card (full payment) detection. All 44 pytest tests pass: 10 new in test_iteration21_best_card.py, plus the iteration 19 and 20 regression tests. In extract_offers, EMI, 'No Cost EMI' and instalment lines are skipped. A % offer saves its 'up to ₹X' cap. mark_best_card on price 24999 picks the SBI offer (10% up to ₹2,000) with saving 2000 over '₹1,500 off HDFC CC', and the ICICI ₹3000 EMI offer is ignored. At price 9999 the HDFC flat ₹1,500 offer wins. Running it twice still leaves exactly one best offer, and coupons are never marked best. UI: the public deals page at '/' has no store-filter-* elements. The category chips work; Gold shows 2 cards. The All tab shows 2 deal-best-card-* boxes ('Best card (full payment): ₹1,750 cashback with HDFC Card · save ₹1,750'). In /admin → admin-tab-deals, the store tabs show counts All 89, Flipkart 3, Amazon 80, Myntra 0, Ajio 4, Other 2 (Other + Swiggy). Each tab filters the rows correctly, and the offers lines show ★ on the best card offer.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "engine.CAP_RE", "issue": "'Max discount Rs 1250' and 'maximum discount of ₹X' are not captured, because CAP_RE needs ₹/Rs right after 'max'/'up to'. So '10% off Axis Credit Card. Max discount Rs 1250' at price 20000 gives saving 2000 instead of 1250. Suggest allowing optional words, e.g. (?:up\\s*to|upto|max(?:imum)?)(?:\\s*(?:discount|cashback|off|of))*\\s*(?:₹|rs\\.?|inr)\\s*."},
+      {"endpoint": "engine.extract_offers", "issue": "Any line containing 'EMI' is dropped entirely, even when it also states a full-payment offer, e.g. '₹1000 off HDFC Credit Card incl. EMI' → no offer. It may be acceptable, but it loses valid offers."},
+      {"endpoint": "engine.mark_best_card / OffersBox", "issue": "UPI and wallet offers (kind 'bank') can be marked best and shown as 'Best card (full payment): 5% off via UPI'. That label is misleading if the intent is cards only."}
+    ]
+  },
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": ["/app/backend/tests/test_iteration21_best_card.py", "/app/backend/tests/test_iteration19_gold_offers_window.py", "/app/backend/tests/test_iteration20_offer_fixes.py", "/app/test_reports/pytest/pytest_iteration21.xml"],
+  "action_items": [
+    "Optional: widen CAP_RE so 'Max discount Rs X' and similar phrasings are capped",
+    "Optional: decide whether wallet/UPI offers should count as 'Best card'"
+  ],
+  "critical_code_review_comments": [
+    "Admin DealsTab uses GET /api/deals?limit=500, which applies the public website_max_age_hours window (24h). So the Control Room 'All deals' only lists recent or featured deals, not every stored deal. Consider an admin flag to skip the window.",
+    "CARD_RE still includes 'emi', but EMI lines are now skipped, so that alternative is unused.",
+    "The % check in mark_best_card relies on the label prefix (label.split(' ')[0]). A stored 'unit' or 'pct' field would be more robust."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration21_best_card.py"],
+  "success_rate": {"backend": "100% (44/44)", "frontend": "100%"},
+  "seed_data_creation": "None",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "The public deals page is at '/' (not /deals). The admin Deals tab testid is admin-tab-deals. Telegram is connected; do not log out. Deals with best-card offers: b93b6de8... (gold ring, HDFC ₹1,750 cashback) and e207fc9f... (HDFC ₹10,000)."
+}

@@ -55,7 +55,7 @@ def is_gold(text):
 BANKS = ["HDFC", "SBI", "ICICI", "Axis", "Kotak", "IDFC", "OneCard", "BOB", "Bank of Baroda", "RBL", "HSBC", "Yes Bank", "AU",
          "Federal", "IndusInd", "Citi", "AMEX", "American Express", "Standard Chartered", "Flipkart Axis", "Amazon Pay ICICI",
          "Canara", "PNB", "Union Bank", "BOI", "DBS", "Paytm", "UPI", "Super.money", "Cred", "Mobikwik", "Amazon Pay", "PhonePe"]
-CAP_RE = re.compile(r'(?:up\s*to|upto|max(?:imum)?)\s*(?:₹|rs\.?|inr)\s*([\d,]*\d)', re.I)
+CAP_RE = re.compile(r'(?:up\s*to|upto|max(?:imum)?)(?:\s*(?:discount|cashback|off|of|benefit|savings?))*\s*(?:₹|rs\.?|inr)\s*([\d,]*\d)', re.I)
 BANK_NAMES = {b.lower(): b for b in BANKS}
 WALLETS = {"UPI", "Paytm", "Cred", "Mobikwik", "Amazon Pay", "PhonePe", "Super.money"}
 BANK_RE = re.compile(r'\b(' + "|".join(re.escape(b) for b in sorted(BANKS, key=len, reverse=True)) + r')\b', re.I)
@@ -88,7 +88,9 @@ def extract_offers(text):
         seen.add("supercoin")
     for raw in INVISIBLE.sub("", text).splitlines():
         line = URL_RE.sub("", raw).strip(" •*-–>✅❌👉🔥💳🏦")
-        if not line or len(line) > 160 or re.search(r"\bemi\b|no[\s-]*cost|instal+ment", line, re.I):
+        if not line or len(line) > 160:
+            continue
+        if re.search(r"\bemi\b|no[\s-]*cost|instal+ment", line, re.I) and not re.search(r"incl|\+\s*emi|&\s*emi|and\s*emi|non[\s-]*emi|full\s*(?:swipe|payment)", line, re.I):
             continue
         bank = BANK_RE.search(line)
         low = line.lower()
@@ -106,7 +108,7 @@ def extract_offers(text):
             key = f"bank:{name.lower()}:{amt}"
             if key not in seen:
                 seen.add(key)
-                offers.append({"kind": "bank", "label": label, "amount": amt, **({"cap": cap} if cap else {})})
+                offers.append({"kind": "bank", "label": label, "amount": amt, "wallet": name in WALLETS, **({"cap": cap} if cap else {})})
         elif "coupon" in low and amt:
             amt, amt_txt = _amount_label(line, "coupon")
             code = CODE_RE.search(raw)
