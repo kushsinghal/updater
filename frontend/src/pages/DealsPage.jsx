@@ -18,8 +18,6 @@ const FILTERS = [
   { key: "starred", label: "Starred", icon: Star, testid: "category-filter-starred" },
 ];
 
-const STORES = ["All stores", "Flipkart", "Amazon", "Myntra", "Ajio", "Other"];
-
 const Hero = ({ stats, scan, scanning }) => {
   const every = stats ? (stats.check_interval_seconds < 60 ? `${stats.check_interval_seconds} sec` : `${Math.round(stats.check_interval_seconds / 60)} min`) : "…";
   return (
@@ -62,8 +60,7 @@ export default function DealsPage() {
   const [minOff, setMinOff] = useState(70);
   const [q, setQ] = useState("");
   const [sort, setSort] = useState("latest");
-  const [store, setStore] = useState("All stores");
-  const params = () => ({ category: cat, q: q || undefined, sort, store: store === "All stores" ? undefined : store });
+  const params = () => ({ category: cat, q: q || undefined, sort });
   const [loading, setLoading] = useState(true);
   const [tick, setTick] = useState(0);
 
@@ -107,7 +104,7 @@ export default function DealsPage() {
     }, 250);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cat, q, sort, store]);
+  }, [cat, q, sort]);
 
   return (
     <main className="mx-auto max-w-7xl space-y-10 px-4 py-8 sm:px-8 sm:py-12">
@@ -119,14 +116,6 @@ export default function DealsPage() {
               className={`flex shrink-0 items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold transition-colors ${
                 cat === key ? "bg-slate-900 text-white shadow-md" : "border border-slate-200 bg-white text-slate-700 hover:border-[#FF5A1F] hover:text-[#FF5A1F]"}`}>
               <Icon className="h-4 w-4" /> {key === "heavy_discount" ? `${label} ${minOff}%+` : label}
-            </button>
-          ))}
-        </div>
-        <div className="no-scrollbar flex gap-2 overflow-x-auto">
-          {STORES.map((n) => (
-            <button key={n} data-testid={`store-filter-${n.toLowerCase().replace(/\s+/g, "-")}`} onClick={() => setStore(n)}
-              className={`shrink-0 rounded-lg px-3 py-1.5 text-xs font-bold uppercase tracking-wide transition-colors ${store === n ? "bg-[#FF5A1F] text-white" : "border border-slate-200 bg-white text-slate-600 hover:text-[#FF5A1F]"}`}>
-              {n === "Other" ? "Other stores" : n}
             </button>
           ))}
         </div>

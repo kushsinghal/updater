@@ -31,6 +31,11 @@ const DealRow = ({ d, reload }) => {
         <p className={`truncate font-mono text-[11px] ${d.converted ? "text-emerald-700" : "text-amber-600"}`}>
           {d.converted ? "Your Sankmo link" : "Not converted"}: {d.affiliate_url}
         </p>
+        {(d.offers || []).length > 0 && (
+          <p data-testid={`admin-deal-offers-${d.id}`} className="truncate text-[11px] text-slate-600">
+            {d.offers.map((o) => (o.best ? `★ ${o.label}` : o.label)).join(" · ")}
+          </p>
+        )}
       </div>
       <Button size="sm" className={ghostBtn} onClick={star} data-testid={`admin-deal-star-${d.id}`} aria-label="Star">
         <Star className={`h-4 w-4 ${d.featured ? "fill-[#FFC200] text-[#B7791F]" : ""}`} />
@@ -43,15 +48,30 @@ const DealRow = ({ d, reload }) => {
   );
 };
 
+const MAJOR = ["Flipkart", "Amazon", "Myntra", "Ajio"];
+const TABS = ["All", ...MAJOR, "Other"];
+const inTab = (d, t) => t === "All" || (t === "Other" ? !MAJOR.includes(d.store) : d.store === t);
+
 export const DealsTab = () => {
   const [list, setList] = useState([]);
-  const load = () => api.get("/deals", { params: { limit: 200 } }).then((r) => setList(r.data));
+  const [tab, setTab] = useState("All");
+  const load = () => api.get("/deals", { params: { limit: 500 } }).then((r) => setList(r.data));
   useEffect(() => { load(); }, []);
+  const shown = list.filter((d) => inTab(d, tab));
   return (
-    <Panel testid="admin-deals-panel" title="All deals" desc="Star a deal to pin it in Best Deals. Best Deals also picks top-scoring drops from the last 3 days automatically.">
+    <Panel testid="admin-deals-panel" title="All deals" desc="Split by store. Star a deal to pin it in Best Deals. Best Deals also picks top-scoring drops automatically.">
+      <div className="no-scrollbar mb-4 flex gap-2 overflow-x-auto">
+        {TABS.map((t) => (
+          <button key={t} data-testid={`admin-store-tab-${t.toLowerCase()}`} onClick={() => setTab(t)}
+            className={`flex shrink-0 items-center gap-2 rounded-full px-4 py-1.5 text-xs font-bold transition-colors ${tab === t ? "bg-slate-900 text-white" : "border border-slate-300 text-slate-700 hover:bg-slate-200"}`}>
+            {t === "Other" ? "Other stores" : t}
+            <span className={`rounded-full px-1.5 text-[10px] ${tab === t ? "bg-white/20" : "bg-slate-200"}`}>{list.filter((d) => inTab(d, t)).length}</span>
+          </button>
+        ))}
+      </div>
       <div className="space-y-2">
-        {list.map((d) => <DealRow key={d.id} d={d} reload={load} />)}
-        {list.length === 0 && <p className="text-sm text-slate-500">No deals yet.</p>}
+        {shown.map((d) => <DealRow key={d.id} d={d} reload={load} />)}
+        {shown.length === 0 && <p className="text-sm text-slate-500">No deals here yet.</p>}
       </div>
     </Panel>
   );

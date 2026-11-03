@@ -55,6 +55,7 @@ def is_gold(text):
 BANKS = ["HDFC", "SBI", "ICICI", "Axis", "Kotak", "IDFC", "OneCard", "BOB", "Bank of Baroda", "RBL", "HSBC", "Yes Bank", "AU",
          "Federal", "IndusInd", "Citi", "AMEX", "American Express", "Standard Chartered", "Flipkart Axis", "Amazon Pay ICICI",
          "Canara", "PNB", "Union Bank", "BOI", "DBS", "Paytm", "UPI", "Super.money", "Cred", "Mobikwik", "Amazon Pay", "PhonePe"]
+CAP_RE = re.compile(r'(?:up\s*to|upto|max(?:imum)?)\s*(?:₹|rs\.?|inr)\s*([\d,]*\d)', re.I)
 BANK_NAMES = {b.lower(): b for b in BANKS}
 WALLETS = {"UPI", "Paytm", "Cred", "Mobikwik", "Amazon Pay", "PhonePe", "Super.money"}
 BANK_RE = re.compile(r'\b(' + "|".join(re.escape(b) for b in sorted(BANKS, key=len, reverse=True)) + r')\b', re.I)
@@ -87,7 +88,7 @@ def extract_offers(text):
         seen.add("supercoin")
     for raw in INVISIBLE.sub("", text).splitlines():
         line = URL_RE.sub("", raw).strip(" •*-–>✅❌👉🔥💳🏦")
-        if not line or len(line) > 160:
+        if not line or len(line) > 160 or re.search(r"\bemi\b|no[\s-]*cost|instal+ment", line, re.I):
             continue
         bank = BANK_RE.search(line)
         low = line.lower()
@@ -98,10 +99,14 @@ def extract_offers(text):
             ctype = {"cc": "Credit Card", "dc": "Debit Card"}.get(card.group(1).lower(), card.group(1).title()) if card else "Card"
             verb = "cashback" if "cashback" in low else "off"
             label = f"{amt_txt} {verb} via {name}" if name in WALLETS else f"{amt_txt} {verb} with {name} {ctype}".replace("Card Card", "Card")
+            cap_m = CAP_RE.search(line)
+            cap = to_num(cap_m.group(1)) if cap_m and amt_txt.endswith("%") else None
+            if cap:
+                label += f" (up to ₹{cap:,.0f})"
             key = f"bank:{name.lower()}:{amt}"
             if key not in seen:
                 seen.add(key)
-                offers.append({"kind": "bank", "label": label, "amount": amt})
+                offers.append({"kind": "bank", "label": label, "amount": amt, **({"cap": cap} if cap else {})})
         elif "coupon" in low and amt:
             amt, amt_txt = _amount_label(line, "coupon")
             code = CODE_RE.search(raw)
@@ -120,6 +125,26 @@ def extract_offers(text):
             seen.add("supercoin")
             offers.append({"kind": "supercoin", "label": f"Use {n} SuperCoins" if n else "Extra savings with SuperCoins"})
     return offers[:6]
+
+
+def mark_best_card(offers, price):
+    """Flag the bank/card offer that saves the most on full payment."""
+    def saving(o):
+        a = o.get("amount") or 0
+        if "%" in o["label"].split(" ")[0]:
+            v = price * a / 100 if price else 0
+            return min(v, o["cap"]) if o.get("cap") else v
+        return a
+    banks = [o for o in offers if o["kind"] == "bank"]
+    for o in banks:
+        o.pop("best", None)
+    if banks:
+        top = max(banks, key=saving)
+        top["best"] = True
+        s = saving(top)
+        if s:
+            top["saving"] = round(s)
+    return offers
 
 
 def to_num(s):

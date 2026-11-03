@@ -266,7 +266,8 @@ async def enrich(deal_id):
         settings = await get_settings()
         cats = d.get("categories") if d.get("source_id") == "manual" else engine.classify(d.get("text", ""), discount, settings)
         upd.update({"price": price, "mrp": mrp, "discount": discount, "categories": cats,
-                    "store_price": ph.get("price") if ph.get("price") and price and ph["price"] > price * 1.01 else None})
+                    "store_price": ph.get("price") if ph.get("price") and price and ph["price"] > price * 1.01 else None,
+                    "offers": engine.mark_best_card(d.get("offers") or [], price)})
         if price and ph.get("min"):
             upd["lowest_ever"] = price <= ph["min"]
     await db.deals.update_one({"id": deal_id}, {"$set": upd})
@@ -299,7 +300,7 @@ async def ingest(parsed, source, settings, autopost, budget=None):
         except Exception as e:
             logger.warning(f"dealsmagnet resolve failed: {e}")
     deal["clean_url"] = await engine.clean_link(deal["url"])
-    deal["offers"] = engine.extract_offers(f"{deal.get('text', '')}\n{deal.get('note') or ''}")
+    deal["offers"] = engine.mark_best_card(engine.extract_offers(f"{deal.get('text', '')}\n{deal.get('note') or ''}"), deal.get("price"))
     if deal.get("store") == "Other":
         deal["store"] = engine.detect_store(deal["clean_url"], deal.get("text", ""))
     since = (datetime.now(timezone.utc) - timedelta(days=2)).isoformat()
@@ -875,7 +876,7 @@ async def convert_bulk(body: BulkIn):
     for link, info in zip(links, infos):
         ctx = link_context(body.text, link)
         apply_post_price(info, ctx)
-        info["offers"] = engine.extract_offers(ctx)
+        info["offers"] = engine.mark_best_card(engine.extract_offers(ctx), info.get("price"))
     missing = list(dict.fromkeys(c for c, i in zip(cleaned, infos) if not i["image"] and engine.detect_store(c) != "Amazon"))
     base = body.base.rstrip("/") if body.base and re.match(r"https://[\w.-]+$", body.base.rstrip("/")) else None
     items, swaps = [], []
@@ -1137,9 +1138,9 @@ async def seed():
 
 async def add_offers_all():
     s = await get_settings()
-    async for d in db.deals.find({}, {"_id": 0, "id": 1, "text": 1, "note": 1, "discount": 1, "source_id": 1, "categories": 1}):
+    async for d in db.deals.find({}, {"_id": 0, "id": 1, "text": 1, "note": 1, "discount": 1, "source_id": 1, "categories": 1, "price": 1}):
         text = f"{d.get('text', '')}\n{d.get('note') or ''}"
-        upd = {"offers": engine.extract_offers(text)}
+        upd = {"offers": engine.mark_best_card(engine.extract_offers(text), d.get("price"))}
         if d.get("source_id") != "manual":
             upd["categories"] = engine.classify(text, d.get("discount") or 0, s)
         await db.deals.update_one({"id": d["id"]}, {"$set": upd})
