@@ -341,6 +341,9 @@ async def tg_picture(clean, settings, need_image=True):
     base = settings.get("public_base")
     if not base or engine.detect_store(clean) == "Amazon":
         return None, None
+    cached = await db.images.find_one({"url": clean}, {"_id": 0, "id": 1, "title": 1})
+    if cached:
+        return f"{base}/api/img/{cached['id']}", cached.get("title")
     try:
         p = (await tgconv.web_previews([clean], settings)).get(clean) or {}
     except Exception as e:
@@ -349,11 +352,13 @@ async def tg_picture(clean, settings, need_image=True):
     image = None
     if need_image and p.get("photo"):
         pid = uuid.uuid4().hex
-        await db.images.insert_one({"id": pid, "data": p["photo"], "ctype": "image/jpeg", "created_at": now()})
+        await db.images.insert_one({"id": pid, "url": clean, "title": None, "data": p["photo"], "ctype": "image/jpeg", "created_at": now()})
         image = f"{base}/api/img/{pid}"
     title = re.split(r"\s+-\s+Buy\s|\s+\|\s+Flipkart", html_lib.unescape(p.get("title") or ""))[0].strip()
     if re.search(r"Online Shopping|All Categories|^Flipkart", title):
         title = ""
+    if image and title:
+        await db.images.update_one({"url": clean}, {"$set": {"title": title}})
     return image, title or None
 
 
@@ -602,7 +607,8 @@ MAJOR_STORES = ["Flipkart", "Amazon", "Myntra", "Ajio"]
 @api.get("/stats")
 async def stats():
     st = await get_settings()
-    vis = {"posted_at": {"$gte": (datetime.now(timezone.utc) - timedelta(hours=st.get("website_max_age_hours", 24))).isoformat()}}
+    vis = {"$or": [{"posted_at": {"$gte": (datetime.now(timezone.utc) - timedelta(hours=st.get("website_max_age_hours", 24))).isoformat()}},
+                   {"featured": True}]}
     out = {"total": await db.deals.count_documents(vis), "all_time": await db.deals.count_documents({}),
            "website_max_age_hours": st.get("website_max_age_hours", 24)}
     for c in engine.CATEGORIES:

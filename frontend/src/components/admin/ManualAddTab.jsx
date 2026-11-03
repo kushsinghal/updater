@@ -35,8 +35,8 @@ export const ManualAddTab = () => {
   const off = f.price && f.mrp && Number(f.mrp) > Number(f.price) ? Math.round((1 - f.price / f.mrp) * 100) : null;
   const toggleCat = (k) => setF({ ...f, categories: f.categories.includes(k) ? f.categories.filter((x) => x !== k) : [...f.categories, k] });
 
-  const fetchDetails = async (url = f.url) => {
-    if (!url.startsWith("http") || url === lastLooked) return;
+  const fetchDetails = async (url = f.url, force = false) => {
+    if (!url.startsWith("http") || (!force && url === lastLooked)) return;
     setLooking(true);
     setLastLooked(url);
     try {
@@ -73,7 +73,7 @@ export const ManualAddTab = () => {
             <Input data-testid="manual-deal-url-input" value={f.url} onChange={set("url")} onBlur={() => fetchDetails()}
               onPaste={(e) => { const t = e.clipboardData.getData("text").trim(); setTimeout(() => fetchDetails(t), 0); }}
               placeholder="https://www.flipkart.com/…" className={fieldCls} />
-            <Button data-testid="manual-deal-fetch-button" type="button" className={ghostBtn} disabled={looking} onClick={() => { setLastLooked(""); fetchDetails(); }}>
+            <Button data-testid="manual-deal-fetch-button" type="button" className={ghostBtn} disabled={looking} onClick={() => fetchDetails(f.url, true)}>
               <Wand2 className="mr-1 h-4 w-4" /> {looking ? "Fetching…" : "Fetch details"}
             </Button>
           </div></div>

@@ -1,0 +1,40 @@
+{
+  "summary": "Tested the 24h website window, gold category, offer extraction, store filter, lookup, manual add and the 3h title dedupe, on both backend and frontend. Backend: 21 of 22 new tests pass (/app/backend/tests/test_iteration19_gold_offers_window.py). is_gold gives the right answer for all 5 example titles, and gold_enabled=False turns the gold category off. extract_offers gives coupon/bank/supercoin labels ('₹3,000 coupon', '₹10,750 off with HDFC Credit Card', 'Use 500 SuperCoins') and '100% SuperCoins back — almost FREE'. format_message shows the 'Gold Deal:' prefix and the 💳/🎟️/🪙/💰 lines and the 🏷️ store-price line. GET /api/deals shows no non-featured deal older than 24h for any category (all, supercoin_100, gift_card, heavy_discount, loot, gold, lowest, best). Stats are windowed: total 79 out of all_time 172, website_max_age_hours=24, gold=1. The store=Flipkart/Amazon/Myntra/Ajio filter returns only that store. store=Other leaves out the major stores (it was empty right now). /api/lookup for the iPhone 15 link returns the cleaned link, store Flipkart, title 'Apple iPhone 15 (Black, 128 GB)' and an /api/img image; price and mrp were null. A non-http link gives 400. POST /api/deals with the note 'Extra ₹1,200 off with HDFC Credit Card' and post_now=false creates a bank offer and the deal is in the list. It was deleted and then returns 404. Ingest dedupe: the same title from another source is blocked when the earlier deal is 2h old and accepted when it is 4h old. FAILED: gift-card lines are labelled as bank card offers. UI: the store chips work and send the right API calls. The Gold tab shows only gold deals. OffersBox shows on 7 cards, including deal-store-price ('Store ₹37,957 → you pay ₹36,207 (save ₹1,750)'). The copied text has the 🏷️ store price and the 💳/🎟️ offer lines. The Rules gold switch saves false, stays off after a reload, and was turned back on (it is true again). The Destinations form has the 'Gold & Silver' chip. On Manual add, blur and Ctrl+V paste both auto-fill the title and image, and the image preview loads. The supercoin chip adds its text and selects the 100% SuperCoin category. Publishing with post_now off works and the form resets. The test deal was deleted. Mobile 390px has no horizontal overflow.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "engine.extract_offers", "issue": "Gift-card lines become bank offers. CARD_RE matches 'card' inside 'gift card', and BANKS contains 'Amazon Pay'/'UPI'/'Cred'. Real data examples: '50% off on - Amazon Pay Digital Gift Card' -> '50% off with Amazon Pay Card'. 'Swiggy Gift Card 15% off via HDFC' -> '15% off with HDFC Card'. 'Myntra e-gift voucher flat 12% off with UPI' -> '12% off with UPI Upi' (label is also garbled). A Cred voucher line -> '₹500 off with Cred Card'. Fix: skip the bank branch when GIFT_RE matches the line (or remove 'gift card' before CARD_RE), and drop the ctype when it equals the bank name."},
+      {"endpoint": "engine.extract_offers coupon amount", "issue": "_amount_label takes the FIRST amount on the line, not the one next to 'coupon'. 'Upto 73% Off On Livon Shampoo + Upto 20% Off Coupon.' -> '73% coupon'. Should be 20%."},
+      {"endpoint": "engine.extract_offers label case", "issue": "The bank name keeps the case from the post, e.g. '5% off with hdfc Credit Card'. Normalise it to the canonical BANKS spelling."},
+      {"endpoint": "GET /api/lookup", "issue": "Every lookup call stores a new image in db.images (tg_picture inserts a new uuid each time). Repeated lookups or fetches leave orphan images behind. Consider caching by clean URL."},
+      {"endpoint": "GET /api/stats", "issue": "The window count leaves out featured deals, but /api/deals includes featured deals that are older than the window. Counts can differ from the cards when old starred deals exist."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "ManualAddTab Fetch details button", "issue": "After the auto lookup (blur or paste), clicking 'Fetch details' for the same URL makes NO request (verified: 0 /api/lookup calls). onClick runs setLastLooked('') and then fetchDetails(), but fetchDetails still sees the old lastLooked from its closure, so `url === lastLooked` returns early. Fix: pass a force flag, e.g. fetchDetails(f.url, true), or use a ref.", "selector": "[data-testid='manual-deal-fetch-button']", "priority": "MEDIUM"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Deals grid", "issues": ["Many cards still show a letter placeholder image and 'Price on store' (old issue, not new)."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_iteration19_gold_offers_window.py", "/app/test_reports/pytest/pytest_iteration19.xml"],
+  "action_items": [
+    "extract_offers: do not label gift-card/voucher lines as bank card offers; fix the 'UPI Upi' / 'Cred Card' labels",
+    "extract_offers: for coupons, use the amount closest to the word 'coupon'",
+    "ManualAddTab: make the Fetch details button re-fetch even when the URL was already looked up (stale closure)",
+    "Optional: cache tg_picture images by URL so lookup does not keep adding to db.images"
+  ],
+  "critical_code_review_comments": [
+    "ManualAddTab `set` uses the closed-over `f` (setF({...f})). Use the functional form setF(p => ...) so fast edits during the async lookup are not lost.",
+    "add_deal builds text as title+' '+note, and ingest adds note again (text+'\\n'+note). The offers come out the same, but the note is counted twice in the text.",
+    "test_iteration18 test_brogity_split_deals_api now fails only because those deals are older than 24h (expected after the window change and the clock jump). It should be retired or changed to use category=starred."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration19_gold_offers_window.py"],
+  "success_rate": {"backend": "95% (21/22 new tests)", "frontend": "92% (all flows work except Fetch details re-fetch)"},
+  "seed_data_creation": "None kept. TEST_ deals and sources were created and deleted. gold_enabled was turned off and then back on (true).",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "No Telegram destinations exist (destinations list empty), so post_now could not be checked end to end. Flipkart lookup price and mrp are null (pricehistory rate-limited). Store 'Other' currently has 0 deals inside the 24h window. test_gift_card_not_bank should pass after the extract_offers fix."
+}

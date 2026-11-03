@@ -55,6 +55,8 @@ def is_gold(text):
 BANKS = ["HDFC", "SBI", "ICICI", "Axis", "Kotak", "IDFC", "OneCard", "BOB", "Bank of Baroda", "RBL", "HSBC", "Yes Bank", "AU",
          "Federal", "IndusInd", "Citi", "AMEX", "American Express", "Standard Chartered", "Flipkart Axis", "Amazon Pay ICICI",
          "Canara", "PNB", "Union Bank", "BOI", "DBS", "Paytm", "UPI", "Super.money", "Cred", "Mobikwik", "Amazon Pay", "PhonePe"]
+BANK_NAMES = {b.lower(): b for b in BANKS}
+WALLETS = {"UPI", "Paytm", "Cred", "Mobikwik", "Amazon Pay", "PhonePe", "Super.money"}
 BANK_RE = re.compile(r'\b(' + "|".join(re.escape(b) for b in sorted(BANKS, key=len, reverse=True)) + r')\b', re.I)
 CARD_RE = re.compile(r'\b(credit\s*card|debit\s*card|cc|dc|emi|card|upi|wallet)\b', re.I)
 OFF_AMT_RE = re.compile(r'(?:₹|rs\.?|inr)\s*([\d,]*\d)|([\d,]*\d)\s*(?:₹|rs\b|/-)|(\d{1,2}(?:\.\d+)?)\s*%', re.I)
@@ -62,10 +64,15 @@ COINS_RE = re.compile(r'([\d,]*\d)\s*super\s*coins?|super\s*coins?[^\n\d]{0,20}(
 CODE_RE = re.compile(r'\b(?:code|coupon\s*code)\s*[:\-]?\s*([A-Z0-9]{4,20})\b')
 
 
-def _amount_label(line):
-    m = OFF_AMT_RE.search(line)
-    if not m:
+def _amount_label(line, near=None):
+    ms = list(OFF_AMT_RE.finditer(line))
+    if not ms:
         return None, ""
+    m = ms[0]
+    if near:
+        i = line.lower().find(near)
+        before = [x for x in ms if x.start() < i] if i >= 0 else []
+        m = before[-1] if before else min(ms, key=lambda x: abs(x.start() - i)) if i >= 0 else ms[0]
     if m.group(3):
         return float(m.group(3)), f"{m.group(3).rstrip('0').rstrip('.') if '.' in m.group(3) else m.group(3)}%"
     v = to_num(m.group(1) or m.group(2))
@@ -85,15 +92,18 @@ def extract_offers(text):
         bank = BANK_RE.search(line)
         low = line.lower()
         amt, amt_txt = _amount_label(line)
-        if bank and (CARD_RE.search(line) or "off" in low or "discount" in low or "cashback" in low) and amt:
-            name = bank.group(1)
+        if bank and not GIFT_RE.search(line) and (CARD_RE.search(line) or "off" in low or "discount" in low or "cashback" in low) and amt:
+            name = BANK_NAMES.get(bank.group(1).lower(), bank.group(1))
             card = CARD_RE.search(line)
             ctype = {"cc": "Credit Card", "dc": "Debit Card"}.get(card.group(1).lower(), card.group(1).title()) if card else "Card"
+            verb = "cashback" if "cashback" in low else "off"
+            label = f"{amt_txt} {verb} via {name}" if name in WALLETS else f"{amt_txt} {verb} with {name} {ctype}".replace("Card Card", "Card")
             key = f"bank:{name.lower()}:{amt}"
             if key not in seen:
                 seen.add(key)
-                offers.append({"kind": "bank", "label": f"{amt_txt} {'cashback' if 'cashback' in low else 'off'} with {name} {ctype}".replace("Card Card", "Card"), "amount": amt})
+                offers.append({"kind": "bank", "label": label, "amount": amt})
         elif "coupon" in low and amt:
+            amt, amt_txt = _amount_label(line, "coupon")
             code = CODE_RE.search(raw)
             key = f"coupon:{amt}"
             if key not in seen:
