@@ -16,7 +16,7 @@ export const previewUrl = (path) => `${API}/go/${path}`;
 
 export const dealText = ({ title, price, mrp, discount, store, link, preview, offers, store_price }) => {
   const off = price && mrp && mrp > price ? Math.round((1 - price / mrp) * 100) : discount ? Math.round(discount) : null;
-  const lines = [`🔥 ${title || "Hot deal"}`, ""];
+  const lines = [`🔥 ${(title || "Hot deal").replace(/[\s\-–,|]+(?:for|with|and|by|of|in|-)?\s*$/i, "") || title}`, ""];
   if (price) lines.push(`✅ Deal Price: ${inr(price)}`);
   if (mrp && (!price || mrp > price)) lines.push(`❌ MRP: ${inr(mrp)}`);
   if (off) lines.push(`💥 ${off}% OFF`);

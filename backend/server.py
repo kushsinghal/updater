@@ -247,7 +247,7 @@ async def enrich(deal_id):
         upd["store"] = engine.detect_store(d["clean_url"])
     if ph:
         if ph.get("name") and len(re.sub(r"[^A-Za-z]", "", d.get("title", ""))) < 14:
-            upd["title"] = ph["name"]
+            upd["title"] = engine.clean_title(ph["name"]) or ph["name"]
         upd.update({"ph_min": ph.get("min"), "ph_max": ph.get("max"), "ph_avg": ph.get("avg"), "ph_url": ph.get("page_url")})
         if not d.get("image") and ph.get("image"):
             upd["image"] = ph["image"]
@@ -292,6 +292,7 @@ async def ingest(parsed, source, settings, autopost, budget=None):
     deal = {**parsed, "id": str(uuid.uuid4()), "dedupe_key": key, "source": source.get("name"),
             "source_id": source["id"], "posted_to": [], "created_at": now(), "posted_at": posted_at,
             "text_price": parsed.get("price"), "text_mrp": parsed.get("mrp")}
+    deal["title"] = engine.clean_title(deal.get("title")) or deal.get("title") or "Deal"
     if "dealsmagnet.com/deal" in deal["url"]:
         try:
             deal["url"], dm_img = await engine.resolve_dealsmagnet(deal["url"])
@@ -376,7 +377,7 @@ async def fill_split_info(deal, settings):
     """Give each split product its own name and picture."""
     info = await product_details(deal["clean_url"], settings)
     deal["image"] = info.get("image") or deal.get("image")
-    deal["title"] = (info.get("title") or f"{deal['post_title']} ({deal['split_index']}/{deal['split_total']})")[:140]
+    deal["title"] = (engine.clean_title(info.get("title")) or f"{deal['post_title']} ({deal['split_index']}/{deal['split_total']})")[:140]
     deal["title_key"] = re.sub(r"[^a-z0-9]", "", deal["title"].lower())[:60]
     if not deal.get("price") and info.get("price"):
         deal["price"] = info["price"]
@@ -843,7 +844,7 @@ async def deal_info(url):
     if not info["image"] and "flipkart" not in url:
         info["image"] = await engine.fetch_og_image(url)
     if info["title"]:
-        info["title"] = re.sub(r"[\s\-–,|]+(?:for|with|and|by|of|in|-)?\s*$", "", html_lib.unescape(info["title"]).strip(), flags=re.I) or info["title"]
+        info["title"] = engine.clean_title(html_lib.unescape(info["title"])) or info["title"]
     if info["price"] and info["mrp"] and info["mrp"] <= info["price"] * 1.03:
         info["mrp"] = None
     return info
@@ -1132,6 +1133,8 @@ async def seed():
     if not settings.get("prices_v2"):
         asyncio.create_task(reprice_all())
     asyncio.create_task(fix_deal_site_links())
+    async for d in db.deals.find({"title": {"$regex": r"[\s\-–,|](for|with|and|by|of|in)\s*$", "$options": "i"}}, {"_id": 0, "id": 1, "title": 1}):
+        await db.deals.update_one({"id": d["id"]}, {"$set": {"title": engine.clean_title(d["title"]) or d["title"]}})
     if not settings.get("offers_v1"):
         asyncio.create_task(add_offers_all())
 

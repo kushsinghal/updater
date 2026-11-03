@@ -1,0 +1,25 @@
+{
+  "summary": "Tested the change that makes the Sankmo/affiliate link the default for copied deals, and the trimming of a dangling 'For' at the end of titles. The link fix works. Pytest: 18/18 pass (8 new in test_iteration22_direct_copy_link.py plus the iteration 21 regression tests). GET /api/settings returns copy_link_style 'direct'. POST /api/convert/bulk for the Flipkart iPhone link returns a fkrt.site link with the title 'Apple iPhone 15 (Black, 128 GB)'. UI in /admin → Convert Links: copy-style-direct is selected by default and labelled 'My Sankmo / affiliate link (recommended)'. With direct, both Copy details + link (bulk-copy-details-0) and Copy all deals with details put 'https://fkrt.site/DOfX79T' on the clipboard, with no /api/go/. With copy-style-preview, both buttons copy the /api/go/ link. Switching back to direct gives fkrt.site again, and settings were left as 'direct'. On the Deals page '/', copy-deal-link-button-{id} copies the deal's affiliate_url (fkrt.site for Flipkart deals, the Amazon URL for Amazon deals), never /api/go/. Problem: the title trim only runs in deal_info, which the bulk convert endpoint uses. Deals that arrive from Telegram sources still keep dangling words. 11 of 400 deals on the site currently end with For/of/with, including 6 'Unltd by TIMEX Group Analog Watch  For' deals from @TricksByStg posted 2026-11-03 16:52. That is the user's own example, and the Deals page copy button still copies the title with ' For'.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "Telegram/source ingestion title paths (server.py ~L250 ph['name'], tg_picture ~L358/L371/L379, ~L435, ~L938 upd title)", "issue": "The dangling-word trim regex is only used in deal_info (bulk convert). Titles from Telegram ingestion and from split deals are stored without it. Live examples: 0e1cc762-f505-4faf-84b6-c3d1d3d168c8 'Unltd by TIMEX Group Analog Watch  For', c08fc2ab... 'VYOM INDIA Pain Relief Roll On, Pack of', e26ad1fc... 'Bosch CrispMaxx Digital Air Fryer XL 72L with'. The Deals page copy text keeps ' For'."}
+    ]
+  },
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": ["/app/backend/tests/test_iteration22_direct_copy_link.py", "/app/test_reports/pytest/pytest_iteration22.xml"],
+  "action_items": [
+    "Move the title trim into one helper (e.g. engine.clean_title) and use it everywhere a deal title is set (ingest, tg_picture, the split-deal title, the bulk update at ~L938). Optionally also trim in the frontend dealText, so deals already stored are copied without the dangling word.",
+    "Optional: run a one-off cleanup of the 11 deals already stored with dangling 'For'/'of'/'with' titles. This needs user consent; the testing agent did not change any data."
+  ],
+  "critical_code_review_comments": [
+    "The trim regex is inline in deal_info, so it is not reused. Copies of the same title-building logic (re.split on ' - Buy '/'| Flipkart') appear at L358 and L935 without the trim.",
+    "The trim also removes a valid trailing 'In', e.g. a product named '... Plug In'. This is rare, but the list could be limited to for/with/and/of."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration22_direct_copy_link.py"],
+  "success_rate": {"backend": "100% (18/18)", "frontend": "100% for copy-link flows; title trim only partly effective"},
+  "seed_data_creation": "None. The bulk convert created share codes for the iPhone link, as normal app behaviour. copy_link_style was switched to preview and back to direct; the final value is 'direct'.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Grant clipboard-read/write permissions. The Convert Links tab is admin-tab-bulk. The copy style buttons save to settings immediately, so always leave the style as 'direct'. Telegram is connected; do not log out. Converting the Flipkart iPhone link takes about 9s."
+}

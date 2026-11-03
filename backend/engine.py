@@ -519,6 +519,11 @@ def score(deal):
     return round(s, 1)
 
 
+def clean_title(t):
+    t = re.sub(r"[\s\-–,|]+(?:for|with|and|by|of|in|-)?\s*$", "", (t or "").strip(), flags=re.I)
+    return t or None
+
+
 def is_amazon(url):
     return detect_store(url) == "Amazon"
 
