@@ -1,0 +1,17 @@
+{
+  "summary": "Retested the fixes from iteration 19. All 34 tests pass: 12 new tests in test_iteration20_offer_fixes.py plus the 22 regression tests in test_iteration19 (test_gift_card_not_bank now passes). extract_offers: 'Amazon Pay Digital Gift Card', 'Swiggy Gift Card 15% off via HDFC', 'Myntra e-gift voucher ... UPI' and 'Cred voucher' lines give no bank offer. 'Flat 10% off with UPI' gives '10% off via UPI'. '5% off with hdfc credit card' gives '5% off with HDFC Credit Card'. The Livon line gives '20% coupon'. The normal bank and coupon labels still work ('₹1,200 off with HDFC Credit Card', '₹3,000 coupon'). /api/lookup: repeated calls for the iPhone 15 link return the same /api/img/6cc60bf9... id, and the db.images count for that URL stayed at 2 (both are old images from before the fix). /api/stats: an old (5 days) featured gold deal added for the test raises total and gold by 1 each and also shows in /api/deals?category=gold. The deal was then deleted. UI on Manual add: blur gives 1 lookup. Each 'Fetch details' click makes a new /api/lookup request (1 -> 2 -> 3). Blurring again on the same URL does not fetch again. Title and image are filled in.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": ["/app/backend/tests/test_iteration20_offer_fixes.py", "/app/backend/tests/test_iteration19_gold_offers_window.py", "/app/test_reports/pytest/pytest_iteration20.xml"],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "tg_picture only caches when a photo is returned. A link with no preview photo (e.g. an unknown Flipkart item) calls Telegram on every lookup. Optional: also cache misses for a short time.",
+    "db.images can hold more than one document for a URL (orphans from before the fix). find_one picks any of them. That is harmless, but a unique index on url, or a cleanup, would keep it tidy."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration20_offer_fixes.py"],
+  "success_rate": {"backend": "100% (34/34)", "frontend": "100%"},
+  "seed_data_creation": "None kept. A TEST_ featured deal was inserted and deleted.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Telegram is connected; do not log out. Flipkart lookup price and mrp are still null. The iPhone 15 link's cached image id is 6cc60bf9e2b04491a2b9b8d19f1949e5."
+}

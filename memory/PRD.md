@@ -113,3 +113,9 @@ Website that finds big deals (Flipkart 100% SuperCoin, gift card discounts, heav
 ## Iteration 16 (Jun 2026)
 - Dedupe fix: same-title block only across different sources within 6h (was any source within 2 days → hid reposts with new links).
 - Split multi-link posts (settings.split_multi, Rules switch): one deal per store link (max 10), own title/picture (pricehistory → Telegram preview stored in db.images using settings.public_base from POST /api/client-base) and price from text near the link.
+
+## Iteration 17 (Jun 2026)
+- Title dedupe window 3h. Website lists + stats only show deals within website_max_age_hours (starred always).
+- Gold & Silver category (engine.is_gold, gold_enabled rule, website tab, Telegram prefix/headline, destination routing).
+- Store tabs (Flipkart/Amazon/Myntra/Ajio/Other). Offer breakdown (engine.extract_offers: bank/card, coupon, cashback, SuperCoins; store_price → you pay) on cards, copy text, Telegram posts, bulk convert.
+- Manual add: /api/lookup auto-fills title/price/MRP/image; note chips (100% SuperCoins = completely FREE, bank, coupon, cashback).
